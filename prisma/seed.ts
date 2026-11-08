@@ -88,8 +88,8 @@ const pick = <T,>(arr: readonly T[], i: number) => arr[i % arr.length];
 const daysAgo = (d: number) => new Date(Date.now() - d * 86400 * 1000);
 
 async function seedDemo() {
-  if (process.env.NODE_ENV === "production") {
-    console.log("⚠ تم تجاهل البيانات التجريبية في بيئة الإنتاج");
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEMO_DATA !== "true") {
+    console.log("⚠ تم تجاهل البيانات التجريبية في بيئة الإنتاج (ALLOW_DEMO_DATA=true لتفعيلها في نسخة العرض)");
     return;
   }
   if ((await db.researchPaper.count()) > 0 || (await db.college.count()) > 0) {

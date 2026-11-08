@@ -1,0 +1,26 @@
+# نشر النظام على Render بضغطة واحدة (Blueprint)
+services:
+  - type: web
+    name: research-office
+    runtime: docker
+    plan: free
+    healthCheckPath: /login
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: research-office-db
+          property: connectionString
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true
+      # بيانات تجريبية للعرض (اجعلها false عند الاستخدام الحقيقي)
+      - key: ALLOW_DEMO_DATA
+        value: "true"
+      - key: SHOW_DEMO_ACCOUNTS
+        value: "true"
+
+databases:
+  - name: research-office-db
+    plan: free
+    databaseName: research_office
