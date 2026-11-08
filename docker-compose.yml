@@ -1,0 +1,15 @@
+# قاعدة بيانات PostgreSQL للتطوير المحلي: docker compose up -d
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: research
+      POSTGRES_PASSWORD: research_dev_pass
+      POSTGRES_DB: research_office
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+volumes:
+  pgdata:

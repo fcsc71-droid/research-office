@@ -1,0 +1,509 @@
+// نظام إدارة مكتب الأبحاث العلمية — مخطط قاعدة البيانات
+// Scientific Research Office Management System — Database schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────────────────── التعدادات ─────────────────────────
+
+enum ResearchStatus {
+  DRAFT // مسودة
+  SUBMITTED // تم التقديم
+  ADMIN_REVIEW // قيد المراجعة الإدارية
+  UNDER_REVIEW // قيد التحكيم العلمي
+  NEEDS_REVISION // يحتاج إلى تعديلات
+  RESUBMITTED // تمت إعادة التقديم
+  ACCEPTED // مقبول
+  REJECTED // مرفوض
+  PUBLISHED // منشور
+  ARCHIVED // مؤرشف
+}
+
+enum ResearchType {
+  GRADUATION_PROJECT // مشروع تخرج
+  MASTER_THESIS // رسالة ماجستير
+  PHD_DISSERTATION // أطروحة دكتوراه
+  JOURNAL_ARTICLE // بحث محكم للنشر
+  CONFERENCE_PAPER // ورقة مؤتمر
+  FUNDED_PROJECT // مشروع بحثي ممول
+  OTHER // أخرى
+}
+
+enum ResearchLevel {
+  UNDERGRADUATE // بكالوريوس
+  DIPLOMA // دبلوم عالي
+  MASTER // ماجستير
+  DOCTORATE // دكتوراه
+  FACULTY // أعضاء هيئة التدريس
+}
+
+enum AcademicDegree {
+  BACHELOR_STUDENT
+  BACHELOR
+  MASTER_STUDENT
+  MASTER
+  PHD_STUDENT
+  PHD
+  LECTURER
+  ASSISTANT_PROFESSOR
+  ASSOCIATE_PROFESSOR
+  PROFESSOR
+}
+
+enum ResearcherType {
+  STUDENT
+  FACULTY
+  STAFF
+  EXTERNAL
+}
+
+enum AuthorRole {
+  MAIN
+  CO_AUTHOR
+}
+
+enum FileCategory {
+  MAIN_DOCUMENT // ملف البحث الرئيسي
+  REVISED_DOCUMENT // نسخة معدلة
+  ATTACHMENT // مرفق
+  DATA // بيانات
+  PRESENTATION // عرض تقديمي
+  IMAGE // صورة
+  REVIEW_REPORT // تقرير محكم
+  OTHER
+}
+
+enum AssignmentStatus {
+  PENDING // بانتظار التحكيم
+  IN_PROGRESS // قيد التحكيم
+  SUBMITTED // تم تسليم التقييم
+  DECLINED // اعتذر المحكم
+  CANCELLED // ملغى
+}
+
+enum ReviewRecommendation {
+  ACCEPT // قبول
+  MINOR_REVISION // قبول بعد تعديلات بسيطة
+  MAJOR_REVISION // قبول بعد تعديلات جوهرية
+  REJECT // رفض
+}
+
+enum CommentType {
+  NOTE // ملاحظة
+  REVISION_REQUEST // طلب تعديل
+  RESEARCHER_REPLY // رد الباحث
+  DECISION // قرار
+  INTERNAL // ملاحظة داخلية (لا تظهر للباحث)
+}
+
+enum NotificationType {
+  NEW_SUBMISSION
+  STATUS_CHANGED
+  REVIEWER_ASSIGNED
+  COMMENT_ADDED
+  REVISION_REQUESTED
+  DECISION
+  DEADLINE
+  REVIEW_SUBMITTED
+  SYSTEM
+}
+
+// ───────────────────────── المستخدمون والصلاحيات ─────────────────────────
+
+model Role {
+  id          String           @id @default(cuid())
+  key         String           @unique // ADMIN, OFFICE_MANAGER, STAFF, RESEARCHER, REVIEWER
+  name        String
+  description String?
+  isSystem    Boolean          @default(true)
+  permissions RolePermission[]
+  users       User[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  code        String           @unique
+  name        String
+  group       String
+  description String?
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model User {
+  id             String      @id @default(cuid())
+  name           String
+  email          String      @unique
+  passwordHash   String
+  phone          String?
+  roleId         String
+  role           Role        @relation(fields: [roleId], references: [id])
+  isActive       Boolean     @default(true)
+  // بيانات المحكم
+  academicTitle  String?
+  specialization String?
+  institution    String?
+  collegeId      String?
+  college        College?    @relation(fields: [collegeId], references: [id], onDelete: SetNull)
+  departmentId   String?
+  department     Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  lastLoginAt    DateTime?
+  failedLogins   Int         @default(0)
+  lockedUntil    DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  sessions            Session[]
+  researcher          Researcher?
+  createdPapers       ResearchPaper[]      @relation("PaperCreator")
+  reviewAssignments   ReviewAssignment[]   @relation("AssignmentReviewer")
+  assignmentsMade     ReviewAssignment[]   @relation("AssignmentAssigner")
+  uploadedFiles       ResearchFile[]
+  versionsCreated     ResearchVersion[]
+  comments            ResearchComment[]
+  notifications       Notification[]
+  auditLogs           AuditLog[]
+  statusChanges       ResearchStatusHistory[]
+
+  @@index([roleId])
+  @@map("users")
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ───────────────────────── الهيكل الأكاديمي ─────────────────────────
+
+model College {
+  id          String          @id @default(cuid())
+  name        String          @unique
+  code        String?         @unique
+  description String?
+  departments Department[]
+  researchers Researcher[]
+  papers      ResearchPaper[]
+  users       User[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@map("colleges")
+}
+
+model Department {
+  id          String          @id @default(cuid())
+  name        String
+  code        String?
+  collegeId   String
+  college     College         @relation(fields: [collegeId], references: [id], onDelete: Restrict)
+  researchers Researcher[]
+  papers      ResearchPaper[]
+  users       User[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([collegeId, name])
+  @@map("departments")
+}
+
+model ResearchCategory {
+  id          String          @id @default(cuid())
+  name        String          @unique
+  description String?
+  papers      ResearchPaper[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@map("research_categories")
+}
+
+// ───────────────────────── الباحثون ─────────────────────────
+
+model Researcher {
+  id             String           @id @default(cuid())
+  userId         String?          @unique
+  user           User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  fullName       String
+  universityId   String           @unique // الرقم الجامعي أو الوظيفي
+  email          String           @unique
+  phone          String?
+  type           ResearcherType   @default(STUDENT)
+  collegeId      String?
+  college        College?         @relation(fields: [collegeId], references: [id], onDelete: SetNull)
+  departmentId   String?
+  department     Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  specialization String?
+  academicDegree AcademicDegree   @default(BACHELOR_STUDENT)
+  notes          String?
+  mainPapers     ResearchPaper[]  @relation("MainResearcher")
+  authorships    ResearchAuthor[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([collegeId])
+  @@index([departmentId])
+  @@index([fullName])
+  @@map("researchers")
+}
+
+// ───────────────────────── الأبحاث ─────────────────────────
+
+model ResearchPaper {
+  id               String            @id @default(cuid())
+  referenceNo      String            @unique
+  titleAr          String
+  titleEn          String?
+  abstract         String
+  keywords         String[]
+  mainResearcherId String
+  mainResearcher   Researcher        @relation("MainResearcher", fields: [mainResearcherId], references: [id], onDelete: Restrict)
+  collegeId        String?
+  college          College?          @relation(fields: [collegeId], references: [id], onDelete: SetNull)
+  departmentId     String?
+  department       Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  categoryId       String?
+  category         ResearchCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  specialization   String?
+  supervisorName   String?
+  type             ResearchType      @default(OTHER)
+  level            ResearchLevel     @default(UNDERGRADUATE)
+  status           ResearchStatus    @default(DRAFT)
+  submittedAt      DateTime?
+  decidedAt        DateTime?
+  decisionAccepted Boolean?
+  publishedAt      DateTime?
+  archivedAt       DateTime?
+  publicationInfo  String?
+  createdById      String
+  createdBy        User              @relation("PaperCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  authors       ResearchAuthor[]
+  files         ResearchFile[]
+  versions      ResearchVersion[]
+  assignments   ReviewAssignment[]
+  comments      ResearchComment[]
+  statusHistory ResearchStatusHistory[]
+
+  @@index([status])
+  @@index([collegeId])
+  @@index([departmentId])
+  @@index([categoryId])
+  @@index([submittedAt])
+  @@index([createdAt])
+  @@index([mainResearcherId])
+  @@map("research_papers")
+}
+
+model ResearchAuthor {
+  id           String      @id @default(cuid())
+  paperId      String
+  paper        ResearchPaper @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  researcherId String?
+  researcher   Researcher? @relation(fields: [researcherId], references: [id], onDelete: SetNull)
+  name         String
+  affiliation  String?
+  role         AuthorRole  @default(CO_AUTHOR)
+  order        Int         @default(0)
+
+  @@index([paperId])
+  @@index([researcherId])
+  @@map("research_authors")
+}
+
+/// جولة تقديم (الإصدار الأول، ثم كل نسخة معدلة)
+model ResearchVersion {
+  id          String         @id @default(cuid())
+  paperId     String
+  paper       ResearchPaper  @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  versionNo   Int
+  note        String?
+  createdById String
+  createdBy   User           @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime       @default(now())
+  files       ResearchFile[]
+
+  @@unique([paperId, versionNo])
+  @@map("research_versions")
+}
+
+model ResearchFile {
+  id           String           @id @default(cuid())
+  paperId      String
+  paper        ResearchPaper    @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  versionId    String?
+  version      ResearchVersion? @relation(fields: [versionId], references: [id], onDelete: SetNull)
+  category     FileCategory     @default(ATTACHMENT)
+  title        String?
+  originalName String
+  storageKey   String           @unique
+  mimeType     String
+  extension    String
+  size         Int
+  sha256       String
+  isCurrent    Boolean          @default(true)
+  replacesId   String?          @unique
+  replaces     ResearchFile?    @relation("FileReplacement", fields: [replacesId], references: [id], onDelete: SetNull)
+  replacedBy   ResearchFile?    @relation("FileReplacement")
+  uploadedById String
+  uploadedBy   User             @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+  uploadedAt   DateTime         @default(now())
+  assignmentId String?
+  assignment   ReviewAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+
+  @@index([paperId, isCurrent])
+  @@map("research_files")
+}
+
+// ───────────────────────── التحكيم ─────────────────────────
+
+model ReviewAssignment {
+  id           String           @id @default(cuid())
+  paperId      String
+  paper        ResearchPaper    @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  reviewerId   String
+  reviewer     User             @relation("AssignmentReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+  assignedById String
+  assignedBy   User             @relation("AssignmentAssigner", fields: [assignedById], references: [id], onDelete: Restrict)
+  round        Int              @default(1)
+  status       AssignmentStatus @default(PENDING)
+  assignedAt   DateTime         @default(now())
+  dueDate      DateTime
+  instructions String?
+  reminderSentAt DateTime?
+  completedAt  DateTime?
+  review       ResearchReview?
+  files        ResearchFile[]
+
+  @@unique([paperId, reviewerId, round])
+  @@index([reviewerId, status])
+  @@index([dueDate])
+  @@map("review_assignments")
+}
+
+model ResearchReview {
+  id                   String               @id @default(cuid())
+  assignmentId         String               @unique
+  assignment           ReviewAssignment     @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  qualityScore         Int // جودة البحث 1..10
+  methodologyScore     Int // المنهجية
+  referencesScore      Int // المراجع
+  resultsScore         Int // النتائج
+  originalityScore     Int // الأصالة والإضافة العلمية
+  overallScore         Float
+  commentsToAuthor     String // ملاحظات تظهر للباحث (دون هوية المحكم)
+  confidentialComments String? // ملاحظات سرية لمكتب الأبحاث فقط
+  recommendation       ReviewRecommendation
+  isDraft              Boolean              @default(true)
+  submittedAt          DateTime?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  @@map("research_reviews")
+}
+
+// ───────────────────────── الملاحظات والسجل ─────────────────────────
+
+model ResearchComment {
+  id         String        @id @default(cuid())
+  paperId    String
+  paper      ResearchPaper @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  authorId   String
+  author     User          @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  type       CommentType   @default(NOTE)
+  body       String
+  isResolved Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+
+  @@index([paperId, createdAt])
+  @@map("research_comments")
+}
+
+model ResearchStatusHistory {
+  id          String          @id @default(cuid())
+  paperId     String
+  paper       ResearchPaper   @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  fromStatus  ResearchStatus?
+  toStatus    ResearchStatus
+  note        String?
+  changedById String
+  changedBy   User            @relation(fields: [changedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime        @default(now())
+
+  @@index([paperId, createdAt])
+  @@map("research_status_history")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType @default(SYSTEM)
+  title     String
+  body      String?
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, readAt])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  summary   String?
+  details   Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entity, entityId])
+  @@index([userId])
+  @@map("audit_logs")
+}
+
+model SystemSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}

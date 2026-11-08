@@ -1,26 +1,115 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
+@custom-variant dark (&:is(.dark *));
+
+/* الهوية البصرية: كحلي + أبيض + أزرق هادئ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --radius: 0.65rem;
+  --background: #f4f7fb;
+  --foreground: #0f1f35;
+  --card: #ffffff;
+  --card-foreground: #0f1f35;
+  --popover: #ffffff;
+  --popover-foreground: #0f1f35;
+  --primary: #0f2a4a;
+  --primary-foreground: #ffffff;
+  --secondary: #e8f0fa;
+  --secondary-foreground: #0f2a4a;
+  --muted: #eef2f7;
+  --muted-foreground: #5b6b80;
+  --accent: #e3edf9;
+  --accent-foreground: #0f2a4a;
+  --destructive: #c62f3b;
+  --destructive-foreground: #ffffff;
+  --border: #dce4ee;
+  --input: #d4dde9;
+  --ring: #3b82c4;
+  --brand: #3b82c4;
+  --brand-soft: #dbeafe;
+  --navy: #0f2a4a;
+  --navy-2: #163a63;
+  --sidebar: #0f2a4a;
+  --sidebar-foreground: #dbe6f4;
 }
 
 @theme inline {
+  --font-sans: "Cairo", "Tajawal", system-ui, sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-navy: var(--navy);
+  --color-navy-2: var(--navy-2);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply scroll-smooth;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+  }
+  input[type="date"] {
+    direction: rtl;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* العلامة المائية في واجهة النظام — خلفية ثابتة لا تتلقى النقرات */
+.app-watermark {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.app-watermark span {
+  transform: rotate(-28deg);
+  font-weight: 800;
+  font-size: clamp(20px, 3.6vw, 48px);
+  color: var(--navy);
+  opacity: 0.07;
+  white-space: nowrap;
+}
+/* توسيط العلامة في منطقة المحتوى عند وجود الشريط الجانبي */
+@media (min-width: 1024px) {
+  body:has(aside[data-sidebar]) .app-watermark { right: 16rem; }
+}
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff; }
+  .app-watermark span { opacity: 0.09; font-size: 44px; transform: rotate(-35deg); }
+  .print-area { box-shadow: none !important; border: none !important; }
 }
