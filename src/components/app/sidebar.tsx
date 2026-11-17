@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
-  Archive, Award, BarChart3, Bell, Building, Building2, CalendarDays, ClipboardCheck, FilePlus2, FileText, FolderKanban, GraduationCap,
+  Archive, Award, BarChart3, FileSpreadsheet, Bell, Building, Building2, CalendarDays, ClipboardCheck, FilePlus2, FileText, FolderKanban, GraduationCap,
   Handshake, History, KeyRound, LayoutDashboard, Library, Menu, Presentation, Settings, Sparkles, UserCheck, UserCircle, Users, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,7 @@ import type { NavItem } from "./nav";
 import { APP_NAME, LOGO_PATH } from "@/lib/constants";
 
 const ICONS = {
-  Archive, Award, BarChart3, Bell, Building, Building2, CalendarDays, ClipboardCheck, FilePlus2, FileText, FolderKanban, GraduationCap,
+  Archive, Award, BarChart3, FileSpreadsheet, Bell, Building, Building2, CalendarDays, ClipboardCheck, FilePlus2, FileText, FolderKanban, GraduationCap,
   Handshake, History, KeyRound, LayoutDashboard, Library, Presentation, Settings, Sparkles, UserCheck, UserCircle, Users,
 } as const;
 

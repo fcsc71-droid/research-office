@@ -19,6 +19,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/researchers", label: "أعضاء هيئة التدريس والباحثون", icon: "GraduationCap", perms: ["researchers.view"], section: "الأشخاص والأقسام" },
   { href: "/reviewers", label: "المحكمون", icon: "UserCheck", perms: ["reviewers.manage"], section: "الأشخاص والأقسام" },
   { href: "/departments", label: "الملفات البحثية للأقسام", icon: "Building", perms: ["departments.profile"], section: "الأشخاص والأقسام" },
+  { href: "/import", label: "استيراد البيانات من Excel", icon: "FileSpreadsheet", perms: ["researchers.manage", "research.edit_all"], section: "الإدارة" },
   { href: "/structure", label: "الكليات والأقسام", icon: "Building2", perms: ["structure.manage"], section: "الأشخاص والأقسام" },
   { href: "/reports", label: "التقارير والإحصائيات", icon: "BarChart3", perms: ["reports.view"], section: "الإدارة" },
   { href: "/users", label: "إدارة المستخدمين", icon: "Users", perms: ["users.manage"], section: "الإدارة" },

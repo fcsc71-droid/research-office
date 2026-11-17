@@ -61,8 +61,21 @@ export default async function ResearchListPage({ searchParams }: { searchParams:
       { publicationYear: null, createdAt: { gte: new Date(`${sp.year}-01-01`), lt: new Date(`${Number(sp.year) + 1}-01-01`) } },
     ] });
   }
+  // البحوث المشتركة بين قسمين أو أكثر (حسب أقسام الباحثين المشاركين)
+  if (sp.joint === "1") {
+    const rows = await db.$queryRaw<{ paperId: string }[]>`
+      SELECT ra."paperId" FROM research_authors ra
+      JOIN researchers r ON r.id = ra."researcherId"
+      WHERE r."departmentId" IS NOT NULL
+      GROUP BY ra."paperId"
+      HAVING COUNT(DISTINCT r."departmentId") > 1
+        AND (${sp.dept1 ?? ""} = '' OR BOOL_OR(r."departmentId" = ${sp.dept1 ?? ""}))
+        AND (${sp.dept2 ?? ""} = '' OR BOOL_OR(r."departmentId" = ${sp.dept2 ?? ""}))`;
+    and.push({ id: { in: rows.map((r) => r.paperId) } });
+  }
   const sort = SORTS[sp.sort ?? "newest"] ?? SORTS.newest;
 
+  const allDepts = staff ? [] : await db.department.findMany({ orderBy: { name: "asc" } });
   const [total, papers, colleges, departments, categories] = await Promise.all([
     db.researchPaper.count({ where }),
     db.researchPaper.findMany({
@@ -103,6 +116,13 @@ export default async function ResearchListPage({ searchParams }: { searchParams:
               ? [
                   { type: "select" as const, name: "collegeId", label: "الكلية", value: sp.collegeId, options: colleges.map((c) => ({ value: c.id, label: c.name })) },
                   { type: "select" as const, name: "departmentId", label: "القسم", value: sp.departmentId, options: departments.map((c) => ({ value: c.id, label: c.name })) },
+                ]
+              : []),
+            { type: "select", name: "joint", label: "بحوث مشتركة", value: sp.joint, options: [{ value: "1", label: "مشتركة بين قسمين أو أكثر" }] },
+            ...(sp.joint === "1"
+              ? [
+                  { type: "select" as const, name: "dept1", label: "القسم الأول", value: sp.dept1, options: (staff ? departments : allDepts).map((c) => ({ value: c.id, label: c.name })) },
+                  { type: "select" as const, name: "dept2", label: "القسم الثاني", value: sp.dept2, options: (staff ? departments : allDepts).map((c) => ({ value: c.id, label: c.name })) },
                 ]
               : []),
             { type: "select", name: "categoryId", label: "التخصص", value: sp.categoryId, options: categories.map((c) => ({ value: c.id, label: c.name })) },
