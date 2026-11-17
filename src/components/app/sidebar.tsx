@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   Archive, Award, BarChart3, FileSpreadsheet, Bell, Building, Building2, CalendarDays, ClipboardCheck, FilePlus2, FileText, FolderKanban, GraduationCap,
-  Handshake, History, KeyRound, LayoutDashboard, Library, Menu, Presentation, Settings, Sparkles, UserCheck, UserCircle, Users, X,
+  Handshake, History, KeyRound, LayoutDashboard, Library, Network, Menu, Presentation, Settings, Sparkles, UserCheck, UserCircle, Users, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { NavItem } from "./nav";
@@ -12,7 +12,7 @@ import { APP_NAME, LOGO_PATH } from "@/lib/constants";
 
 const ICONS = {
   Archive, Award, BarChart3, FileSpreadsheet, Bell, Building, Building2, CalendarDays, ClipboardCheck, FilePlus2, FileText, FolderKanban, GraduationCap,
-  Handshake, History, KeyRound, LayoutDashboard, Library, Presentation, Settings, Sparkles, UserCheck, UserCircle, Users,
+  Handshake, History, KeyRound, LayoutDashboard, Library, Network, Presentation, Settings, Sparkles, UserCheck, UserCircle, Users,
 } as const;
 
 function NavList({ items, onNavigate, unread }: { items: NavItem[]; onNavigate?: () => void; unread: number }) {

@@ -26,5 +26,6 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/roles", label: "الأدوار والصلاحيات", icon: "KeyRound", perms: ["roles.manage"], section: "الإدارة" },
   { href: "/audit", label: "سجل العمليات", icon: "History", perms: ["audit.view"], section: "الإدارة" },
   { href: "/settings", label: "إعدادات النظام", icon: "Settings", perms: ["settings.manage"], section: "الإدارة" },
+  { href: "/diagrams", label: "مخططات المنظومة", icon: "Network", section: "الحساب" },
   { href: "/profile", label: "الملف الشخصي", icon: "UserCircle", section: "الحساب" },
 ];
