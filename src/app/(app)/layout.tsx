@@ -26,7 +26,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="flex items-center gap-3">
             <MobileNav items={items} unread={unread} />
             <div className="hidden sm:block">
-              <p className="text-sm font-bold text-navy">{settings.officeName}</p>
+              <p className="text-sm font-bold text-navy">{settings.officeName} — منظومة إدارة البحث العلمي</p>
               <p className="text-xs text-muted-foreground">{settings.universityName}</p>
             </div>
           </div>

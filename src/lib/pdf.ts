@@ -72,16 +72,29 @@ export function watermarkHtml() {
   return `<div class="wm" aria-hidden="true"><span>${esc(WATERMARK_TEXT)}</span></div>`;
 }
 
+let logoData: string | null = null;
+async function getLogo() {
+  if (logoData !== null) return logoData;
+  try {
+    const buf = await fs.readFile(path.join(process.cwd(), "public", "brand", "logo.png"));
+    logoData = `data:image/png;base64,${buf.toString("base64")}`;
+  } catch {
+    logoData = "";
+  }
+  return logoData;
+}
+
 export async function buildDocumentHtml(opts: DocOptions, forPrint = false) {
+  const logo = await getLogo();
   const now = new Intl.DateTimeFormat("ar-EG-u-nu-latn", { dateStyle: "long", timeStyle: "short" }).format(new Date());
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${esc(opts.title)}</title>
 <style>${await getFontCss()}${DOC_CSS}${forPrint ? ".noprint{position:fixed;top:10px;left:10px;z-index:5}@media print{.noprint{display:none}}" : ""}</style></head>
 <body>${opts.watermark ? watermarkHtml() : ""}
 ${forPrint ? `<div class="noprint"><button onclick="window.print()" style="font-family:Cairo;padding:6px 14px;border-radius:6px;border:1px solid #0f2a4a;background:#0f2a4a;color:#fff;cursor:pointer">طباعة</button></div>` : ""}
 <div class="content">
-<header class="doc"><div><div class="org">${esc(opts.orgName ?? APP_NAME)}</div><h1>${esc(opts.title)}</h1>${
+<header class="doc"><div style="display:flex;gap:12px;align-items:center">${logo ? `<img src="${logo}" alt="" style="width:62px;height:62px;border-radius:50%">` : ""}<div><div class="org">${esc(opts.orgName ?? APP_NAME)}</div><h1>${esc(opts.title)}</h1>${
     opts.subtitle ? `<div class="sub">${esc(opts.subtitle)}</div>` : ""
-  }</div><div class="meta">تاريخ الإصدار<br>${esc(now)}</div></header>
+  }</div></div><div class="meta">تاريخ الإصدار<br>${esc(now)}</div></header>
 ${opts.bodyHtml}
 <footer class="doc"><span>${esc(APP_NAME)}</span><span>مستند صادر آلياً من النظام</span></footer>
 </div>${forPrint ? "<script>window.addEventListener('load',()=>setTimeout(()=>window.print(),400))</script>" : ""}</body></html>`;

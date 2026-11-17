@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 // فحص مبدئي متفائل: إعادة توجيه غير المسجلين لصفحة الدخول.
 // التحقق الفعلي من الجلسة والصلاحيات يتم على الخادم في كل صفحة وإجراء وواجهة برمجية.
-const PUBLIC = ["/login", "/api/cron"];
+const PUBLIC = ["/login", "/api/cron", "/portal", "/brand"];
 
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;

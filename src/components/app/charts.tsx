@@ -37,15 +37,18 @@ export function CategoryChart({ data }: { data: { name: string; value: number }[
 
 export function HorizontalBars({ data, name = "العدد" }: { data: { name: string; value: number }[]; name?: string }) {
   if (!data.length) return <p className="py-16 text-center text-sm text-muted-foreground">لا توجد بيانات</p>;
+  // dir="ltr" لمنطقة الرسم فقط: يمنع اتجاه الصفحة RTL من قلب محاذاة نصوص المحاور فوق الأعمدة
   return (
+    <div dir="ltr">
     <ResponsiveContainer width="100%" height={Math.max(200, data.length * 34)}>
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
         <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} reversed />
-        <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 11, fontFamily: "Cairo" }} orientation="right" />
+        <YAxis type="category" dataKey="name" width={170} tick={{ fontSize: 11, fontFamily: "Cairo", fill: "#334155" }} orientation="right" />
         <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "#eef4fb" }} />
         <Bar dataKey="value" name={name} fill="#3b82c4" radius={[4, 0, 0, 4]} maxBarSize={22} />
       </BarChart>
     </ResponsiveContainer>
+    </div>
   );
 }

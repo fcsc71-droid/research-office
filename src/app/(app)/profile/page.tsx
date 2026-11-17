@@ -2,6 +2,11 @@ import { UserCircle, KeyRound } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { updateProfileAction, changePasswordAction } from "@/actions/admin";
+import { updateOwnResearchProfileAction } from "@/actions/researchers";
+import { ResearchProfileFields } from "@/components/app/research-profile-fields";
+import { attachmentsFor } from "@/lib/attachments";
+import { AttachmentList } from "@/components/app/attachment-list";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +23,8 @@ export default async function ProfilePage() {
     where: { id: me.id },
     include: { role: true, department: true, college: true, researcher: { select: { universityId: true } }, sessions: { orderBy: { createdAt: "desc" }, take: 5 } },
   });
+  const researcher = me.researcherId ? await db.researcher.findUnique({ where: { id: me.researcherId } }) : null;
+  const cvs = researcher ? (await attachmentsFor("RESEARCHER_CV", [researcher.id])).get(researcher.id) : undefined;
   return (
     <div className="mx-auto grid max-w-5xl gap-5">
       <PageHeader icon={<UserCircle />} title="الملف الشخصي" description="بيانات حسابك وإعدادات الأمان" />
@@ -58,6 +65,23 @@ export default async function ProfilePage() {
           </CardContent>
         </Card>
       </div>
+      {researcher && (
+        <Card>
+          <CardHeader>
+            <CardTitle>ملفي البحثي</CardTitle>
+            <p className="text-sm text-muted-foreground">حدّث بياناتك الأكاديمية ومعرفاتك العلمية لتظهر في ملفك البحثي وتقارير المعهد. <Link href="/my-records" className="text-brand hover:underline">إنتاجي العلمي: البحوث والمشاريع والمشاركات والجوائز ←</Link></p>
+          </CardHeader>
+          <CardContent>
+            <ActionForm action={updateOwnResearchProfileAction} className="grid gap-4 md:grid-cols-2">
+              <Field label="رقم الهاتف"><Input name="phone" defaultValue={researcher.phone ?? ""} dir="ltr" className="text-left" /></Field>
+              <Field label="التخصص الدقيق"><Input name="specialization" defaultValue={researcher.specialization ?? ""} /></Field>
+              <ResearchProfileFields r={researcher} />
+              {cvs?.length ? <div className="md:col-span-2"><AttachmentList items={cvs} /></div> : null}
+              <div><SubmitButton>حفظ الملف البحثي</SubmitButton></div>
+            </ActionForm>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

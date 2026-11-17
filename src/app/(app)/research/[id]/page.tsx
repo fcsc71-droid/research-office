@@ -8,10 +8,11 @@ import { requireUser, can } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getPaperAccess } from "@/lib/access";
 import { getSettings } from "@/lib/settings";
-import { TRANSITIONS } from "@/lib/workflow";
+import { transitionsFor } from "@/lib/workflow";
+import { findPaperDuplicates } from "@/lib/duplicates";
 import {
   ASSIGNMENT_STATUS_COLORS, ASSIGNMENT_STATUS_LABELS, COMMENT_TYPE_LABELS, FILE_ACCEPT_ATTR, FILE_CATEGORY_LABELS,
-  LEVEL_LABELS, RECOMMENDATION_LABELS, STATUS_LABELS, TYPE_LABELS,
+  LEVEL_LABELS, RECOMMENDATION_LABELS, STATUS_LABELS, TYPE_LABELS, ARTICLE_TYPE_LABELS, INDEXING_LABELS, QUARTILE_LABELS,
 } from "@/lib/constants";
 import {
   addCommentAction, assignReviewerAction, cancelAssignmentAction, changeStatusAction, deleteFileAction, deletePaperAction,
@@ -46,6 +47,7 @@ export default async function ResearchDetailPage({ params }: { params: Promise<{
       college: true,
       department: true,
       category: true,
+      journal: true,
       createdBy: { select: { name: true } },
       authors: { orderBy: { order: "asc" }, include: { researcher: { select: { id: true, universityId: true } } } },
       files: { orderBy: { uploadedAt: "desc" }, include: { uploadedBy: { select: { name: true } }, version: { select: { versionNo: true } } } },
@@ -63,7 +65,8 @@ export default async function ResearchDetailPage({ params }: { params: Promise<{
   if (!access.canView) notFound();
 
   const staffView = access.staff;
-  const transitions = TRANSITIONS[paper.status].filter((t) => can(user, t.perm));
+  const transitions = transitionsFor(paper.status, paper.recordKind).filter((t) => can(user, t.perm));
+  const duplicates = staffView ? await findPaperDuplicates(paper) : [];
   const ownerCanSubmit = access.owner && paper.status === "DRAFT" && settings.allowResearcherSelfSubmit && !transitions.some((t) => t.to === "SUBMITTED");
   const currentFiles = paper.files.filter((f) => f.isCurrent && (f.category !== "REVIEW_REPORT" || access.canSeeReviews));
   const oldFiles = paper.files.filter((f) => !f.isCurrent && (f.category !== "REVIEW_REPORT" || access.canSeeReviews));
@@ -95,6 +98,8 @@ export default async function ResearchDetailPage({ params }: { params: Promise<{
               <StatusBadge status={paper.status} />
               <Badge variant="outline">{TYPE_LABELS[paper.type]}</Badge>
               <Badge variant="outline">{LEVEL_LABELS[paper.level]}</Badge>
+              <Badge variant={paper.recordKind === "PUBLISHED_RECORD" ? "secondary" : "outline"}>{paper.recordKind === "PUBLISHED_RECORD" ? "توثيق بحث منشور" : "مقدَّم للتحكيم"}</Badge>
+              {paper.indexing !== "NONE" && <Badge variant="success">{INDEXING_LABELS[paper.indexing]}</Badge>}
             </div>
             <h1 className="text-xl leading-relaxed font-extrabold text-navy sm:text-2xl">{paper.titleAr}</h1>
             {paper.titleEn && <p dir="ltr" className="text-left text-sm text-muted-foreground lg:text-right">{paper.titleEn}</p>}
@@ -116,6 +121,22 @@ export default async function ResearchDetailPage({ params }: { params: Promise<{
         </CardContent>
       </Card>
 
+
+      {duplicates.length > 0 && (
+        <Card className="border-amber-300 bg-amber-50/70">
+          <CardContent className="pt-5 text-sm">
+            <p className="mb-2 font-bold text-amber-900">⚠ تنبيه كشف التكرار: توجد سجلات مشابهة قد تكون مكررة</p>
+            <ul className="grid gap-1">
+              {duplicates.map((d) => (
+                <li key={d.id}>
+                  <Link href={`/research/${d.id}`} className="text-navy hover:underline">{d.referenceNo} — {d.titleAr}</Link>
+                  <span className="text-xs text-muted-foreground"> ({d.sameDoi ? "نفس DOI" : `تشابه العنوان ${Math.round(d.score * 100)}%`})</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
       {/* سير العمل */}
       {(transitions.length > 0 || ownerCanSubmit || (paper.status === "NEEDS_REVISION" && (access.owner || can(user, "files.manage"))) || myAssignment) && (
         <Card className="no-print border-brand/30 bg-brand-soft/20">
@@ -205,6 +226,22 @@ export default async function ResearchDetailPage({ params }: { params: Promise<{
                 {paper.publishedAt && <InfoRow label="تاريخ النشر">{formatDate(paper.publishedAt)}</InfoRow>}
                 {paper.publicationInfo && <InfoRow label="بيانات النشر">{paper.publicationInfo}</InfoRow>}
                 {staffView && <InfoRow label="أُنشئ بواسطة">{paper.createdBy.name} — {formatDate(paper.createdAt)}</InfoRow>}
+              </dl>
+            </CardContent>
+          </Card>
+
+          <Card className="lg:col-span-3">
+            <CardHeader><CardTitle>بيانات النشر</CardTitle></CardHeader>
+            <CardContent className="grid gap-x-8 md:grid-cols-2">
+              <dl>
+                <InfoRow label="نوع المقالة">{ARTICLE_TYPE_LABELS[paper.articleType]}</InfoRow>
+                <InfoRow label="المجلة">{paper.journal?.name ?? paper.journalName}</InfoRow>
+                <InfoRow label="تصنيف المجلة">{INDEXING_LABELS[paper.indexing]}{paper.journal && paper.journal.quartile !== "NONE" ? ` — ${QUARTILE_LABELS[paper.journal.quartile]}` : ""}</InfoRow>
+              </dl>
+              <dl>
+                <InfoRow label="سنة النشر">{paper.publicationYear}</InfoRow>
+                <InfoRow label="DOI">{paper.doi ? <a href={`https://doi.org/${paper.doi}`} target="_blank" rel="noopener noreferrer" dir="ltr" className="text-brand hover:underline">{paper.doi}</a> : null}</InfoRow>
+                <InfoRow label="رابط البحث">{paper.url ? <a href={paper.url} target="_blank" rel="noopener noreferrer" dir="ltr" className="break-all text-brand hover:underline">{paper.url}</a> : null}</InfoRow>
               </dl>
             </CardContent>
           </Card>

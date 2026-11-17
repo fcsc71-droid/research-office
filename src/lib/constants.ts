@@ -1,5 +1,16 @@
 // ثوابت النظام والتسميات العربية — يمكن استيرادها في الخادم والمتصفح
 import type {
+  ArticleType,
+  AwardType,
+  CollaborationType,
+  EventScope,
+  EventType,
+  IndexingType,
+  ParticipationRole,
+  PartnerType,
+  ProjectStatus,
+  Quartile,
+  RecordStatus,
   AcademicDegree,
   AssignmentStatus,
   CommentType,
@@ -23,6 +34,8 @@ export const ROLE_KEYS = {
   STAFF: "STAFF",
   RESEARCHER: "RESEARCHER",
   REVIEWER: "REVIEWER",
+  DEPT_HEAD: "DEPT_HEAD",
+  STUDENT: "STUDENT",
 } as const;
 export type RoleKey = (typeof ROLE_KEYS)[keyof typeof ROLE_KEYS];
 
@@ -30,8 +43,10 @@ export const ROLE_LABELS: Record<string, string> = {
   ADMIN: "مدير النظام",
   OFFICE_MANAGER: "مدير مكتب الأبحاث العلمية",
   STAFF: "موظف إداري",
-  RESEARCHER: "باحث",
+  RESEARCHER: "عضو هيئة التدريس / باحث",
   REVIEWER: "محكم علمي",
+  DEPT_HEAD: "رئيس القسم العلمي",
+  STUDENT: "طالب",
 };
 
 /** قائمة الصلاحيات المعتمدة في النظام */
@@ -58,6 +73,15 @@ export const PERMISSIONS = [
   { code: "roles.manage", name: "إدارة الأدوار والصلاحيات", group: "الإدارة" },
   { code: "audit.view", name: "عرض سجل العمليات", group: "الإدارة" },
   { code: "settings.manage", name: "إدارة إعدادات النظام والنسخ الاحتياطي", group: "الإدارة" },
+  { code: "research.view_department", name: "عرض أبحاث وبيانات القسم (رئيس القسم)", group: "الأبحاث" },
+  { code: "records.submit_own", name: "إضافة الإنتاج العلمي الخاص (مشاريع، مشاركات، جوائز)", group: "الإنتاج العلمي" },
+  { code: "records.approve", name: "مراجعة واعتماد سجلات الإنتاج العلمي", group: "الإنتاج العلمي" },
+  { code: "projects.manage", name: "إدارة المشاريع البحثية", group: "الإنتاج العلمي" },
+  { code: "events.manage", name: "إدارة المؤتمرات والأنشطة العلمية", group: "الإنتاج العلمي" },
+  { code: "journals.manage", name: "إدارة المجلات العلمية", group: "الإنتاج العلمي" },
+  { code: "collaborations.manage", name: "إدارة التعاون البحثي", group: "الإنتاج العلمي" },
+  { code: "awards.manage", name: "إدارة الجوائز والتكريم", group: "الإنتاج العلمي" },
+  { code: "departments.profile", name: "عرض الملفات البحثية للأقسام", group: "الهيكل الأكاديمي" },
 ] as const;
 export type PermissionCode = (typeof PERMISSIONS)[number]["code"];
 
@@ -69,14 +93,19 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleKey, PermissionCode[]> = {
     "research.change_status", "research.approve", "research.comment", "files.manage",
     "reviews.assign", "reviews.view_all", "researchers.view", "researchers.manage", "reviewers.manage",
     "structure.manage", "archive.view", "reports.view", "audit.view",
+    "records.approve", "projects.manage", "events.manage", "journals.manage", "collaborations.manage",
+    "awards.manage", "departments.profile",
   ],
   STAFF: [
     "dashboard.view", "research.view_all", "research.create", "research.edit_all",
     "research.change_status", "research.comment", "files.manage", "researchers.view",
     "researchers.manage", "archive.view", "reports.view",
+    "projects.manage", "events.manage", "journals.manage", "collaborations.manage", "awards.manage", "departments.profile",
   ],
-  RESEARCHER: ["research.create", "archive.view"],
+  RESEARCHER: ["research.create", "archive.view", "records.submit_own"],
   REVIEWER: ["reviews.perform"],
+  DEPT_HEAD: ["research.create", "research.view_department", "departments.profile", "archive.view", "records.submit_own", "researchers.view"],
+  STUDENT: ["archive.view"],
 };
 
 export const STATUS_LABELS: Record<ResearchStatus, string> = {
@@ -205,3 +234,94 @@ export const ALLOWED_FILE_TYPES: Record<string, string[]> = {
 };
 export const ALLOWED_EXTENSIONS = Object.keys(ALLOWED_FILE_TYPES);
 export const FILE_ACCEPT_ATTR = ALLOWED_EXTENSIONS.map((e) => "." + e).join(",");
+
+export const RECORD_STATUS_LABELS: Record<RecordStatus, string> = {
+  PENDING: "بانتظار الاعتماد",
+  APPROVED: "معتمد",
+  RETURNED: "أعيد للاستكمال",
+};
+export const RECORD_STATUS_COLORS: Record<RecordStatus, string> = {
+  PENDING: "bg-amber-50 text-amber-800 border-amber-200",
+  APPROVED: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  RETURNED: "bg-rose-50 text-rose-700 border-rose-200",
+};
+
+export const INDEXING_LABELS: Record<IndexingType, string> = {
+  SCOPUS: "Scopus",
+  WOS: "Web of Science",
+  SCOPUS_WOS: "Scopus و Web of Science",
+  OTHER: "قاعدة فهرسة أخرى",
+  NONE: "غير مفهرس",
+};
+export const QUARTILE_LABELS: Record<Quartile, string> = { Q1: "Q1", Q2: "Q2", Q3: "Q3", Q4: "Q4", NONE: "غير مصنف" };
+
+export const ARTICLE_TYPE_LABELS: Record<ArticleType, string> = {
+  ORIGINAL: "بحث أصيل",
+  REVIEW: "مراجعة علمية",
+  CASE_STUDY: "دراسة حالة",
+  OTHER: "أخرى",
+};
+
+export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
+  PROPOSAL: "مقترح بحثي جديد",
+  UNDER_REVIEW: "قيد المراجعة",
+  APPROVED: "معتمد",
+  IN_PROGRESS: "قيد التنفيذ",
+  COMPLETED: "مكتمل",
+  PUBLISHED: "نُشرت نتائجه",
+};
+export const PROJECT_STATUS_COLORS: Record<ProjectStatus, string> = {
+  PROPOSAL: "bg-slate-100 text-slate-700 border-slate-200",
+  UNDER_REVIEW: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  APPROVED: "bg-sky-50 text-sky-700 border-sky-200",
+  IN_PROGRESS: "bg-blue-50 text-blue-700 border-blue-200",
+  COMPLETED: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  PUBLISHED: "bg-teal-50 text-teal-700 border-teal-200",
+};
+
+export const EVENT_TYPE_LABELS: Record<EventType, string> = {
+  CONFERENCE: "مؤتمر علمي",
+  SEMINAR: "ندوة علمية",
+  WORKSHOP: "ورشة عمل",
+  LECTURE: "محاضرة علمية",
+  TRAINING: "دورة تدريبية بحثية",
+  SCIENTIFIC_DAY: "يوم علمي",
+  EXHIBITION: "معرض / ملتقى علمي",
+  DEPARTMENT_MEETING: "لقاء علمي بين الأقسام",
+};
+export const EVENT_SCOPE_LABELS: Record<EventScope, string> = { LOCAL: "محلي", INTERNATIONAL: "دولي" };
+export const PARTICIPATION_ROLE_LABELS: Record<ParticipationRole, string> = {
+  ATTENDANCE: "حضور",
+  PRESENTER: "تقديم ورقة",
+  SESSION_CHAIR: "رئاسة جلسة",
+  ORGANIZER: "تنظيم",
+};
+
+export const PARTNER_TYPE_LABELS: Record<PartnerType, string> = {
+  LIBYAN_UNIVERSITY: "جامعة ليبية",
+  INTERNATIONAL_UNIVERSITY: "جامعة دولية",
+  RESEARCH_CENTER: "مركز بحوث",
+  SCIENTIFIC_INSTITUTION: "مؤسسة علمية",
+  GOVERNMENT: "جهة حكومية",
+  INDUSTRY: "شركة / مؤسسة صناعية",
+};
+export const COLLABORATION_TYPE_LABELS: Record<CollaborationType, string> = {
+  MOU: "مذكرة تفاهم",
+  AGREEMENT: "اتفاقية تعاون",
+  JOINT_PROJECT: "مشروع مشترك",
+  JOINT_RESEARCH: "بحث مشترك",
+};
+
+export const AWARD_TYPE_LABELS: Record<AwardType, string> = {
+  BEST_PAPER: "جائزة أفضل بحث",
+  CONFERENCE: "جائزة مؤتمر",
+  INNOVATION: "جائزة ابتكار",
+  PATENT: "براءة اختراع",
+  EXCELLENCE: "شهادة تميز بحثي",
+  ACADEMIC: "جائزة أكاديمية",
+  OTHER: "أخرى",
+};
+
+export const INSTITUTE_NAME = "المعهد العالي للتقنيات الهندسية – بنغازي";
+export const INSTITUTE_NAME_EN = "The Higher Institute of Engineering Techniques – Benghazi";
+export const LOGO_PATH = "/brand/logo.png";

@@ -1,7 +1,10 @@
 "use server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { assertPermission, hashPassword } from "@/lib/auth";
+import { assertPermission, assertUser, hashPassword } from "@/lib/auth";
+import { saveAttachment } from "@/lib/attachments";
+import { notify } from "@/lib/notify";
+
 import { audit } from "@/lib/audit";
 import { ActionError, formToObject, ok, run, type ActionResult } from "@/lib/action";
 import { AcademicDegree, ResearcherType } from "@/generated/prisma/enums";
@@ -21,7 +24,32 @@ const researcherSchema = z.object({
   notes: opt(2000),
   createAccount: z.string().optional(),
   password: z.string().optional(),
+  ...profileFields(),
 });
+
+function profileFields() {
+  return {
+    generalSpecialization: opt(200),
+    jobTitle: opt(200),
+    qualification: opt(200),
+    qualificationYear: z.string().optional().transform((v) => (v ? Number(v) : null))
+      .refine((v) => v === null || (Number.isInteger(v) && v >= 1950 && v <= 2100), "سنة غير صالحة"),
+    researchInterests: z.string().max(1000).optional()
+      .transform((v) => [...new Set((v ?? "").split(/[,،\n]/).map((k) => k.trim()).filter(Boolean))].slice(0, 15)),
+    orcid: opt(40).refine((v) => !v || /^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/.test(v), "صيغة ORCID غير صحيحة (مثال: 0000-0002-1825-0097)"),
+    googleScholar: opt(300).refine((v) => !v || /^https?:\/\//.test(v), "أدخل رابط ملف Google Scholar كاملاً"),
+    scopusId: opt(30).refine((v) => !v || /^\d{5,15}$/.test(v), "Scopus Author ID أرقام فقط"),
+    researchGate: opt(300).refine((v) => !v || /^https?:\/\//.test(v), "أدخل رابط ResearchGate كاملاً"),
+  };
+}
+
+function profileData(d: { generalSpecialization: string | null; jobTitle: string | null; qualification: string | null; qualificationYear: number | null; researchInterests: string[]; orcid: string | null; googleScholar: string | null; scopusId: string | null; researchGate: string | null }) {
+  return {
+    generalSpecialization: d.generalSpecialization, jobTitle: d.jobTitle, qualification: d.qualification,
+    qualificationYear: d.qualificationYear, researchInterests: d.researchInterests, orcid: d.orcid,
+    googleScholar: d.googleScholar, scopusId: d.scopusId, researchGate: d.researchGate,
+  };
+}
 
 async function checkDept(collegeId: string | null, departmentId: string | null) {
   if (!departmentId) return collegeId;
@@ -38,6 +66,7 @@ export async function saveResearcherAction(id: string | null, _: ActionResult | 
     const payload = {
       fullName: data.fullName, universityId: data.universityId, email: data.email, phone: data.phone, type: data.type,
       academicDegree: data.academicDegree, collegeId, departmentId: data.departmentId, specialization: data.specialization, notes: data.notes,
+      ...profileData(data),
     };
     let researcher;
     if (id) {
@@ -49,6 +78,8 @@ export async function saveResearcherAction(id: string | null, _: ActionResult | 
       researcher = await db.researcher.create({ data: payload });
       await audit({ userId: user.id, action: "CREATE", entity: "Researcher", entityId: researcher.id, summary: `إضافة الباحث ${data.fullName}` });
     }
+    const cv = fd.get("cv");
+    if (cv instanceof File && cv.size > 0) await saveAttachment("RESEARCHER_CV", researcher.id, cv, user, "السيرة الذاتية");
     if (data.createAccount === "on" && !researcher.userId) {
       const pass = z.string().min(8, "كلمة المرور 8 أحرف على الأقل").max(100).parse(data.password ?? "");
       const role = await db.role.findUniqueOrThrow({ where: { key: "RESEARCHER" } });
@@ -73,5 +104,32 @@ export async function deleteResearcherAction(id: string): Promise<ActionResult> 
     await db.researcher.delete({ where: { id } });
     await audit({ userId: user.id, action: "DELETE", entity: "Researcher", entityId: id, summary: `حذف الباحث ${r.fullName}` });
     return ok("تم حذف الباحث", "/researchers");
+  });
+}
+
+/** عضو هيئة التدريس يحدّث ملفه البحثي بنفسه */
+export async function updateOwnResearchProfileAction(_: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const user = await assertUser();
+    if (!user.researcherId) throw new ActionError("حسابك غير مرتبط بملف باحث");
+    const data = z.object({ phone: opt(30), specialization: opt(200), ...profileFields() }).parse(formToObject(fd));
+    await db.researcher.update({ where: { id: user.researcherId }, data: { phone: data.phone, specialization: data.specialization, ...profileData(data) } });
+    const cv = fd.get("cv");
+    if (cv instanceof File && cv.size > 0) await saveAttachment("RESEARCHER_CV", user.researcherId, cv, user, "السيرة الذاتية");
+    await audit({ userId: user.id, action: "UPDATE", entity: "Researcher", entityId: user.researcherId, summary: "تحديث الملف البحثي الشخصي" });
+    return ok("تم تحديث ملفك البحثي");
+  });
+}
+
+/** طلب تحديث البيانات من عضو هيئة التدريس (إشعار) */
+export async function requestProfileUpdateAction(id: string, _: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const user = await assertPermission("researchers.manage");
+    const r = await db.researcher.findUnique({ where: { id } });
+    if (!r?.userId) throw new ActionError("لا يوجد حساب دخول مرتبط بهذا الباحث");
+    const msg = z.string().trim().max(1000).parse(fd.get("message") ?? "");
+    await notify([r.userId], { type: "SYSTEM", title: "مطلوب تحديث بياناتك البحثية", body: msg || "يرجى مراجعة ملفك البحثي واستكمال البيانات الناقصة.", link: "/profile" });
+    await audit({ userId: user.id, action: "UPDATE", entity: "Researcher", entityId: id, summary: `طلب تحديث بيانات ${r.fullName}` });
+    return ok("تم إرسال طلب التحديث للباحث");
   });
 }

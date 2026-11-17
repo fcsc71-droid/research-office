@@ -114,6 +114,98 @@ enum NotificationType {
   SYSTEM
 }
 
+enum RecordStatus {
+  PENDING // بانتظار المراجعة والاعتماد
+  APPROVED // معتمد
+  RETURNED // أعيد لاستكمال البيانات
+}
+
+enum RecordKind {
+  SUBMISSION // بحث مقدَّم للتحكيم
+  PUBLISHED_RECORD // توثيق بحث منشور مسبقاً
+}
+
+enum IndexingType {
+  SCOPUS
+  WOS
+  SCOPUS_WOS
+  OTHER
+  NONE
+}
+
+enum Quartile {
+  Q1
+  Q2
+  Q3
+  Q4
+  NONE
+}
+
+enum ArticleType {
+  ORIGINAL // بحث أصيل
+  REVIEW // مراجعة علمية
+  CASE_STUDY // دراسة حالة
+  OTHER
+}
+
+enum ProjectStatus {
+  PROPOSAL // مقترح بحثي جديد
+  UNDER_REVIEW // قيد المراجعة
+  APPROVED // معتمد
+  IN_PROGRESS // قيد التنفيذ
+  COMPLETED // مكتمل
+  PUBLISHED // تم نشر نتائجه
+}
+
+enum EventType {
+  CONFERENCE
+  SEMINAR
+  WORKSHOP
+  LECTURE
+  TRAINING
+  SCIENTIFIC_DAY
+  EXHIBITION
+  DEPARTMENT_MEETING
+}
+
+enum EventScope {
+  LOCAL
+  INTERNATIONAL
+}
+
+enum ParticipationRole {
+  ATTENDANCE // حضور
+  PRESENTER // تقديم ورقة
+  SESSION_CHAIR // رئاسة جلسة
+  ORGANIZER // تنظيم
+}
+
+enum PartnerType {
+  LIBYAN_UNIVERSITY
+  INTERNATIONAL_UNIVERSITY
+  RESEARCH_CENTER
+  SCIENTIFIC_INSTITUTION
+  GOVERNMENT
+  INDUSTRY
+}
+
+enum CollaborationType {
+  MOU // مذكرة تفاهم
+  AGREEMENT // اتفاقية
+  JOINT_PROJECT // مشروع مشترك
+  JOINT_RESEARCH // بحث مشترك
+}
+
+enum AwardType {
+  BEST_PAPER
+  CONFERENCE
+  INNOVATION
+  PATENT
+  EXCELLENCE
+  ACADEMIC
+  OTHER
+}
+
 // ───────────────────────── المستخدمون والصلاحيات ─────────────────────────
 
 model Role {
@@ -174,31 +266,32 @@ model User {
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
-  sessions            Session[]
-  researcher          Researcher?
-  createdPapers       ResearchPaper[]      @relation("PaperCreator")
-  reviewAssignments   ReviewAssignment[]   @relation("AssignmentReviewer")
-  assignmentsMade     ReviewAssignment[]   @relation("AssignmentAssigner")
-  uploadedFiles       ResearchFile[]
-  versionsCreated     ResearchVersion[]
-  comments            ResearchComment[]
-  notifications       Notification[]
-  auditLogs           AuditLog[]
-  statusChanges       ResearchStatusHistory[]
+  sessions          Session[]
+  researcher        Researcher?
+  createdPapers     ResearchPaper[]         @relation("PaperCreator")
+  reviewAssignments ReviewAssignment[]      @relation("AssignmentReviewer")
+  assignmentsMade   ReviewAssignment[]      @relation("AssignmentAssigner")
+  uploadedFiles     ResearchFile[]
+  versionsCreated   ResearchVersion[]
+  comments          ResearchComment[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  statusChanges     ResearchStatusHistory[]
+  attachments       Attachment[]
 
   @@index([roleId])
   @@map("users")
 }
 
 model Session {
-  id         String   @id @default(cuid())
-  tokenHash  String   @unique
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expiresAt  DateTime
-  ipAddress  String?
-  userAgent  String?
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
 
   @@index([userId])
   @@map("sessions")
@@ -222,16 +315,17 @@ model College {
 }
 
 model Department {
-  id          String          @id @default(cuid())
+  id          String            @id @default(cuid())
   name        String
   code        String?
   collegeId   String
-  college     College         @relation(fields: [collegeId], references: [id], onDelete: Restrict)
+  college     College           @relation(fields: [collegeId], references: [id], onDelete: Restrict)
   researchers Researcher[]
   papers      ResearchPaper[]
   users       User[]
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  projects    ResearchProject[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
   @@unique([collegeId, name])
   @@map("departments")
@@ -251,25 +345,38 @@ model ResearchCategory {
 // ───────────────────────── الباحثون ─────────────────────────
 
 model Researcher {
-  id             String           @id @default(cuid())
-  userId         String?          @unique
-  user           User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
-  fullName       String
-  universityId   String           @unique // الرقم الجامعي أو الوظيفي
-  email          String           @unique
-  phone          String?
-  type           ResearcherType   @default(STUDENT)
-  collegeId      String?
-  college        College?         @relation(fields: [collegeId], references: [id], onDelete: SetNull)
-  departmentId   String?
-  department     Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  specialization String?
-  academicDegree AcademicDegree   @default(BACHELOR_STUDENT)
-  notes          String?
-  mainPapers     ResearchPaper[]  @relation("MainResearcher")
-  authorships    ResearchAuthor[]
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  id                    String             @id @default(cuid())
+  userId                String?            @unique
+  user                  User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  fullName              String
+  universityId          String             @unique // الرقم الجامعي أو الوظيفي
+  email                 String             @unique
+  phone                 String?
+  type                  ResearcherType     @default(STUDENT)
+  collegeId             String?
+  college               College?           @relation(fields: [collegeId], references: [id], onDelete: SetNull)
+  departmentId          String?
+  department            Department?        @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  specialization        String? // التخصص الدقيق
+  generalSpecialization String? // التخصص العام
+  academicDegree        AcademicDegree     @default(BACHELOR_STUDENT)
+  jobTitle              String? // المسمى الوظيفي
+  qualification         String? // المؤهل العلمي
+  qualificationYear     Int?
+  researchInterests     String[] // الاهتمامات البحثية
+  orcid                 String?
+  googleScholar         String?
+  scopusId              String?
+  researchGate          String?
+  notes                 String?
+  projectsLed           ResearchProject[]  @relation("ProjectLead")
+  projectMemberships    ProjectMember[]
+  eventParticipations   EventParticipant[]
+  awards                Award[]
+  mainPapers            ResearchPaper[]    @relation("MainResearcher")
+  authorships           ResearchAuthor[]
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
 
   @@index([collegeId])
   @@index([departmentId])
@@ -305,6 +412,15 @@ model ResearchPaper {
   publishedAt      DateTime?
   archivedAt       DateTime?
   publicationInfo  String?
+  recordKind       RecordKind        @default(SUBMISSION)
+  articleType      ArticleType       @default(ORIGINAL)
+  journalId        String?
+  journal          Journal?          @relation(fields: [journalId], references: [id], onDelete: SetNull)
+  journalName      String?
+  indexing         IndexingType      @default(NONE)
+  doi              String?
+  url              String?
+  publicationYear  Int?
   createdById      String
   createdBy        User              @relation("PaperCreator", fields: [createdById], references: [id], onDelete: Restrict)
   createdAt        DateTime          @default(now())
@@ -324,19 +440,22 @@ model ResearchPaper {
   @@index([submittedAt])
   @@index([createdAt])
   @@index([mainResearcherId])
+  @@index([doi])
+  @@index([publicationYear])
+  @@index([indexing])
   @@map("research_papers")
 }
 
 model ResearchAuthor {
-  id           String      @id @default(cuid())
+  id           String        @id @default(cuid())
   paperId      String
   paper        ResearchPaper @relation(fields: [paperId], references: [id], onDelete: Cascade)
   researcherId String?
-  researcher   Researcher? @relation(fields: [researcherId], references: [id], onDelete: SetNull)
+  researcher   Researcher?   @relation(fields: [researcherId], references: [id], onDelete: SetNull)
   name         String
   affiliation  String?
-  role         AuthorRole  @default(CO_AUTHOR)
-  order        Int         @default(0)
+  role         AuthorRole    @default(CO_AUTHOR)
+  order        Int           @default(0)
 
   @@index([paperId])
   @@index([researcherId])
@@ -360,26 +479,26 @@ model ResearchVersion {
 }
 
 model ResearchFile {
-  id           String           @id @default(cuid())
+  id           String            @id @default(cuid())
   paperId      String
-  paper        ResearchPaper    @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  paper        ResearchPaper     @relation(fields: [paperId], references: [id], onDelete: Cascade)
   versionId    String?
-  version      ResearchVersion? @relation(fields: [versionId], references: [id], onDelete: SetNull)
-  category     FileCategory     @default(ATTACHMENT)
+  version      ResearchVersion?  @relation(fields: [versionId], references: [id], onDelete: SetNull)
+  category     FileCategory      @default(ATTACHMENT)
   title        String?
   originalName String
-  storageKey   String           @unique
+  storageKey   String            @unique
   mimeType     String
   extension    String
   size         Int
   sha256       String
-  isCurrent    Boolean          @default(true)
-  replacesId   String?          @unique
-  replaces     ResearchFile?    @relation("FileReplacement", fields: [replacesId], references: [id], onDelete: SetNull)
-  replacedBy   ResearchFile?    @relation("FileReplacement")
+  isCurrent    Boolean           @default(true)
+  replacesId   String?           @unique
+  replaces     ResearchFile?     @relation("FileReplacement", fields: [replacesId], references: [id], onDelete: SetNull)
+  replacedBy   ResearchFile?     @relation("FileReplacement")
   uploadedById String
-  uploadedBy   User             @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
-  uploadedAt   DateTime         @default(now())
+  uploadedBy   User              @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+  uploadedAt   DateTime          @default(now())
   assignmentId String?
   assignment   ReviewAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
 
@@ -390,22 +509,22 @@ model ResearchFile {
 // ───────────────────────── التحكيم ─────────────────────────
 
 model ReviewAssignment {
-  id           String           @id @default(cuid())
-  paperId      String
-  paper        ResearchPaper    @relation(fields: [paperId], references: [id], onDelete: Cascade)
-  reviewerId   String
-  reviewer     User             @relation("AssignmentReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
-  assignedById String
-  assignedBy   User             @relation("AssignmentAssigner", fields: [assignedById], references: [id], onDelete: Restrict)
-  round        Int              @default(1)
-  status       AssignmentStatus @default(PENDING)
-  assignedAt   DateTime         @default(now())
-  dueDate      DateTime
-  instructions String?
+  id             String           @id @default(cuid())
+  paperId        String
+  paper          ResearchPaper    @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  reviewerId     String
+  reviewer       User             @relation("AssignmentReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+  assignedById   String
+  assignedBy     User             @relation("AssignmentAssigner", fields: [assignedById], references: [id], onDelete: Restrict)
+  round          Int              @default(1)
+  status         AssignmentStatus @default(PENDING)
+  assignedAt     DateTime         @default(now())
+  dueDate        DateTime
+  instructions   String?
   reminderSentAt DateTime?
-  completedAt  DateTime?
-  review       ResearchReview?
-  files        ResearchFile[]
+  completedAt    DateTime?
+  review         ResearchReview?
+  files          ResearchFile[]
 
   @@unique([paperId, reviewerId, round])
   @@index([reviewerId, status])
@@ -432,6 +551,189 @@ model ResearchReview {
   updatedAt            DateTime             @updatedAt
 
   @@map("research_reviews")
+}
+
+// ───────────────────────── المجلات العلمية ─────────────────────────
+
+model Journal {
+  id               String          @id @default(cuid())
+  name             String
+  publisher        String?
+  issn             String?         @unique
+  url              String?
+  indexing         IndexingType    @default(NONE)
+  quartile         Quartile        @default(NONE)
+  field            String?
+  indexingVerified Boolean         @default(false)
+  verifiedAt       DateTime?
+  papers           ResearchPaper[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([name])
+  @@map("journals")
+}
+
+// ───────────────────────── المشاريع البحثية ─────────────────────────
+
+model ResearchProject {
+  id                String          @id @default(cuid())
+  title             String
+  leadId            String
+  lead              Researcher      @relation("ProjectLead", fields: [leadId], references: [id], onDelete: Restrict)
+  departmentId      String?
+  department        Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  objectives        String?
+  summary           String?
+  startDate         DateTime?
+  expectedEndDate   DateTime?
+  status            ProjectStatus   @default(PROPOSAL)
+  expectedOutputs   String?
+  actualOutputs     String?
+  partners          String? // الجهات المتعاونة أو الممولة
+  reportEveryMonths Int? // دورية تقرير الإنجاز (3 أو 6 أشهر)
+  nextReportDue     DateTime?
+  reportReminderSentAt DateTime?
+  approval          RecordStatus    @default(PENDING)
+  approvalNote      String?
+  createdById       String
+  members           ProjectMember[]
+  reports           ProjectReport[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([status])
+  @@index([departmentId])
+  @@map("research_projects")
+}
+
+model ProjectMember {
+  id           String          @id @default(cuid())
+  projectId    String
+  project      ResearchProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  researcherId String?
+  researcher   Researcher?     @relation(fields: [researcherId], references: [id], onDelete: SetNull)
+  name         String
+  role         String?
+
+  @@index([projectId])
+  @@map("project_members")
+}
+
+model ProjectReport {
+  id          String          @id @default(cuid())
+  projectId   String
+  project     ResearchProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  period      String
+  progress    Int             @default(0) // نسبة الإنجاز
+  body        String
+  createdById String
+  createdAt   DateTime        @default(now())
+
+  @@index([projectId])
+  @@map("project_reports")
+}
+
+// ───────────────────────── المؤتمرات والأنشطة العلمية ─────────────────────────
+
+/// تشمل مشاركات أعضاء هيئة التدريس في الفعاليات الخارجية والأنشطة التي ينظمها المعهد
+model ScientificEvent {
+  id                   String             @id @default(cuid())
+  name                 String
+  type                 EventType
+  scope                EventScope         @default(LOCAL)
+  organizedByInstitute Boolean            @default(false)
+  organizer            String?
+  location             String?
+  startDate            DateTime
+  endDate              DateTime?
+  description          String?
+  url                  String?
+  attendeesCount       Int?
+  approval             RecordStatus       @default(PENDING)
+  approvalNote         String?
+  createdById          String
+  participants         EventParticipant[]
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([startDate])
+  @@index([organizedByInstitute])
+  @@map("scientific_events")
+}
+
+model EventParticipant {
+  id           String            @id @default(cuid())
+  eventId      String
+  event        ScientificEvent   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  researcherId String
+  researcher   Researcher        @relation(fields: [researcherId], references: [id], onDelete: Cascade)
+  role         ParticipationRole @default(ATTENDANCE)
+  paperTitle   String?
+
+  @@unique([eventId, researcherId])
+  @@map("event_participants")
+}
+
+// ───────────────────────── التعاون البحثي ─────────────────────────
+
+model Collaboration {
+  id          String            @id @default(cuid())
+  partnerName String
+  partnerType PartnerType
+  type        CollaborationType
+  title       String
+  description String?
+  startDate   DateTime?
+  endDate     DateTime?
+  coordinator String?
+  approval    RecordStatus      @default(APPROVED)
+  createdById String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@map("collaborations")
+}
+
+// ───────────────────────── الجوائز والتكريم ─────────────────────────
+
+model Award {
+  id           String       @id @default(cuid())
+  researcherId String
+  researcher   Researcher   @relation(fields: [researcherId], references: [id], onDelete: Cascade)
+  title        String
+  type         AwardType
+  grantor      String?
+  date         DateTime
+  description  String?
+  approval     RecordStatus @default(PENDING)
+  approvalNote String?
+  createdById  String
+  createdAt    DateTime     @default(now())
+
+  @@index([researcherId])
+  @@map("awards")
+}
+
+// ───────────────────────── الوثائق والمرفقات العامة ─────────────────────────
+
+/// مرفقات الوحدات (السيرة الذاتية، شهادات المشاركة، صور الأنشطة، الاتفاقيات، تقارير المشاريع...)
+model Attachment {
+  id           String   @id @default(cuid())
+  entityType   String // RESEARCHER_CV | PROJECT | EVENT | COLLABORATION | AWARD
+  entityId     String
+  title        String?
+  originalName String
+  storageKey   String   @unique
+  mimeType     String
+  extension    String
+  size         Int
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+  createdAt    DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@map("attachments")
 }
 
 // ───────────────────────── الملاحظات والسجل ─────────────────────────

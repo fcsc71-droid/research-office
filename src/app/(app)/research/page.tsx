@@ -4,8 +4,8 @@ import { requirePermission, can } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { visiblePapersWhere } from "@/lib/access";
 import type { Prisma } from "@/generated/prisma/client";
-import { ResearchStatus, ResearchType } from "@/generated/prisma/enums";
-import { STATUS_LABELS, TYPE_LABELS } from "@/lib/constants";
+import { ResearchStatus, ResearchType, IndexingType, RecordKind } from "@/generated/prisma/enums";
+import { STATUS_LABELS, TYPE_LABELS, INDEXING_LABELS } from "@/lib/constants";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -49,11 +49,17 @@ export default async function ResearchListPage({ searchParams }: { searchParams:
   }
   if (sp.status && sp.status in ResearchStatus) and.push({ status: sp.status as ResearchStatus });
   if (sp.type && sp.type in ResearchType) and.push({ type: sp.type as ResearchType });
+  if (sp.indexing === "INDEXED") and.push({ indexing: { in: ["SCOPUS", "WOS", "SCOPUS_WOS"] } });
+  else if (sp.indexing && sp.indexing in IndexingType) and.push({ indexing: sp.indexing as IndexingType });
+  if (sp.kind && sp.kind in RecordKind) and.push({ recordKind: sp.kind as RecordKind });
   if (sp.collegeId) and.push({ collegeId: sp.collegeId });
   if (sp.departmentId) and.push({ departmentId: sp.departmentId });
   if (sp.categoryId) and.push({ categoryId: sp.categoryId });
   if (sp.year && /^\d{4}$/.test(sp.year)) {
-    and.push({ createdAt: { gte: new Date(`${sp.year}-01-01`), lt: new Date(`${Number(sp.year) + 1}-01-01`) } });
+    and.push({ OR: [
+      { publicationYear: Number(sp.year) },
+      { publicationYear: null, createdAt: { gte: new Date(`${sp.year}-01-01`), lt: new Date(`${Number(sp.year) + 1}-01-01`) } },
+    ] });
   }
   const sort = SORTS[sp.sort ?? "newest"] ?? SORTS.newest;
 
@@ -80,7 +86,7 @@ export default async function ResearchListPage({ searchParams }: { searchParams:
     <div>
       <PageHeader
         icon={<FileText />}
-        title={staff ? "إدارة الأبحاث العلمية" : "أبحاثي"}
+        title={staff ? "البحوث والمنشورات" : "أبحاثي"}
         description={staff ? "جميع الأبحاث المسجلة في المكتب مع إمكانية البحث والتصفية والترتيب" : "الأبحاث التي قدمتها أو تشارك فيها"}
         actions={can(user, "research.create") && <Button asChild><Link href="/research/new"><FilePlus2 /> إضافة بحث جديد</Link></Button>}
       />
@@ -91,6 +97,8 @@ export default async function ResearchListPage({ searchParams }: { searchParams:
             { type: "search", name: "q", value: sp.q, placeholder: "ابحث بالعنوان، الرقم المرجعي، الباحث، الكلمات المفتاحية..." },
             { type: "select", name: "status", label: "الحالة", value: sp.status, options: Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label })) },
             { type: "select", name: "type", label: "النوع", value: sp.type, options: Object.entries(TYPE_LABELS).map(([value, label]) => ({ value, label })) },
+            { type: "select", name: "kind", label: "نوع السجل", value: sp.kind, options: [{ value: "PUBLISHED_RECORD", label: "توثيق بحث منشور" }, { value: "SUBMISSION", label: "مقدَّم للتحكيم" }] },
+            { type: "select", name: "indexing", label: "الفهرسة", value: sp.indexing, options: [{ value: "INDEXED", label: "Scopus أو WoS" }, ...Object.entries(INDEXING_LABELS).map(([value, label]) => ({ value, label }))] },
             ...(staff
               ? [
                   { type: "select" as const, name: "collegeId", label: "الكلية", value: sp.collegeId, options: colleges.map((c) => ({ value: c.id, label: c.name })) },

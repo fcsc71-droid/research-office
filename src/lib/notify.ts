@@ -52,7 +52,16 @@ export async function runDeadlineReminders(reminderDays: number) {
     where: { status: { in: ["PENDING", "IN_PROGRESS"] }, dueDate: { lte: soon }, reminderSentAt: null },
     include: { paper: { select: { id: true, referenceNo: true, titleAr: true } } },
   });
-  if (!due.length) return 0;
+  // تذكير بمواعيد تقارير إنجاز المشاريع البحثية
+  const projects = await db.researchProject.findMany({
+    where: { status: { in: ["APPROVED", "IN_PROGRESS"] }, nextReportDue: { lte: soon }, reportReminderSentAt: null },
+    include: { lead: { select: { userId: true } } },
+  });
+  for (const p of projects) {
+    await notify([p.lead.userId], { type: "DEADLINE", title: "اقترب موعد تقديم تقرير إنجاز المشروع البحثي", body: p.title, link: `/projects/${p.id}` });
+    await db.researchProject.update({ where: { id: p.id }, data: { reportReminderSentAt: new Date() } });
+  }
+  if (!due.length) return projects.length;
   const managers = await usersWithPermission("reviews.assign");
   for (const a of due) {
     const overdue = a.dueDate < new Date();

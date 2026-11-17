@@ -27,6 +27,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const exportUrl = (format: string) => `/api/reports/export?${q}&format=${format}`;
   const chart =
     filters.type === "departments" ? report.rows.map((r) => ({ name: String(r[1]), value: Number(r[2]) })).filter((x) => x.value > 0)
+    : filters.type === "annual" ? report.rows.filter((r) => r[0] !== "الإجمالي").map((r) => ({ name: String(r[0]), value: Number(r[2]) })).filter((x) => x.value > 0)
+    : filters.type === "faculty_output" ? report.rows.slice(0, 10).map((r) => ({ name: String(r[0]), value: Number(r[3]) })).filter((x) => x.value > 0)
     : filters.type === "researchers" ? report.rows.slice(0, 10).map((r) => ({ name: String(r[0]), value: Number(r[4]) + Number(r[5]) })).filter((x) => x.value > 0)
     : null;
 
@@ -70,7 +72,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             ))}
           </div>
           {chart && chart.length > 0 && (
-            <div className="rounded-lg border p-3"><HorizontalBars data={chart} name={filters.type === "departments" ? "عدد الأبحاث" : "عدد المشاركات"} /></div>
+            <div className="rounded-lg border p-3"><HorizontalBars data={chart} name={["departments", "annual", "faculty_output"].includes(filters.type) ? "عدد الأبحاث" : "عدد المشاركات"} /></div>
           )}
         </CardContent>
         {report.rows.length === 0 ? <EmptyState title="لا توجد بيانات ضمن المعايير المحددة" /> : (

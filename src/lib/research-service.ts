@@ -34,7 +34,7 @@ export async function applyStatusChange(
   if (to === "SUBMITTED") data.submittedAt = now;
   if (to === "ACCEPTED") Object.assign(data, { decidedAt: now, decisionAccepted: true });
   if (to === "REJECTED") Object.assign(data, { decidedAt: now, decisionAccepted: false });
-  if (to === "PUBLISHED") Object.assign(data, { publishedAt: now, ...(note ? { publicationInfo: note } : {}) });
+  if (to === "PUBLISHED") Object.assign(data, { publishedAt: now, decidedAt: now, decisionAccepted: true, ...(note ? { publicationInfo: note } : {}) });
   if (to === "ARCHIVED") data.archivedAt = now;
 
   await db.$transaction([

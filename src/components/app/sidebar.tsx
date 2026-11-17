@@ -3,16 +3,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
-  Archive, BarChart3, Bell, Building2, ClipboardCheck, FilePlus2, FileText, FlaskConical, GraduationCap,
-  History, KeyRound, LayoutDashboard, Menu, Settings, UserCheck, UserCircle, Users, X,
+  Archive, Award, BarChart3, Bell, Building, Building2, CalendarDays, ClipboardCheck, FilePlus2, FileText, FolderKanban, GraduationCap,
+  Handshake, History, KeyRound, LayoutDashboard, Library, Menu, Presentation, Settings, Sparkles, UserCheck, UserCircle, Users, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { NavItem } from "./nav";
-import { APP_NAME } from "@/lib/constants";
+import { APP_NAME, LOGO_PATH } from "@/lib/constants";
 
 const ICONS = {
-  Archive, BarChart3, Bell, Building2, ClipboardCheck, FilePlus2, FileText, GraduationCap, History, KeyRound,
-  LayoutDashboard, Settings, UserCheck, UserCircle, Users,
+  Archive, Award, BarChart3, Bell, Building, Building2, CalendarDays, ClipboardCheck, FilePlus2, FileText, FolderKanban, GraduationCap,
+  Handshake, History, KeyRound, LayoutDashboard, Library, Presentation, Settings, Sparkles, UserCheck, UserCircle, Users,
 } as const;
 
 function NavList({ items, onNavigate, unread }: { items: NavItem[]; onNavigate?: () => void; unread: number }) {
@@ -57,13 +57,12 @@ function NavList({ items, onNavigate, unread }: { items: NavItem[]; onNavigate?:
 
 function Brand() {
   return (
-    <div className="flex items-center gap-3 px-2">
-      <div className="flex size-10 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20">
-        <FlaskConical className="size-5 text-white" />
-      </div>
+    <div className="flex items-center gap-3 px-1">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={LOGO_PATH} alt="شعار المعهد العالي للتقنيات الهندسية – بنغازي" className="size-12 shrink-0 rounded-full bg-white p-0.5 shadow" />
       <div className="leading-tight">
-        <p className="text-sm font-extrabold text-white">مكتب الأبحاث العلمية</p>
-        <p className="text-[11px] text-sidebar-foreground/60">نظام الإدارة المتكامل</p>
+        <p className="text-sm font-extrabold text-white">مكتب البحث العلمي</p>
+        <p className="text-[11px] text-sidebar-foreground/70">المعهد العالي للتقنيات الهندسية – بنغازي</p>
       </div>
     </div>
   );

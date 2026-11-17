@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { LEVEL_LABELS, TYPE_LABELS, FILE_ACCEPT_ATTR } from "@/lib/constants";
+import { LEVEL_LABELS, TYPE_LABELS, FILE_ACCEPT_ATTR, ARTICLE_TYPE_LABELS, INDEXING_LABELS } from "@/lib/constants";
 import { toInputDate } from "@/lib/utils";
 import type { ActionResult } from "@/lib/action";
 import type { ResearchPaper, ResearchAuthor } from "@/generated/prisma/client";
@@ -26,11 +26,12 @@ export async function ResearchForm({
   ownResearcherId?: string | null;
   maxUploadMb: number;
 }) {
-  const [colleges, departments, categories, researchers] = await Promise.all([
+  const [colleges, departments, categories, researchers, journals] = await Promise.all([
     db.college.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.department.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, collegeId: true } }),
     db.researchCategory.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.researcher.findMany({ orderBy: { fullName: "asc" }, select: { id: true, fullName: true, universityId: true, collegeId: true, departmentId: true } }),
+    db.journal.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, issn: true } }),
   ]);
   const opts = researchers.map((r) => ({ id: r.id, name: r.fullName, sub: r.universityId }));
   const own = researchers.find((r) => r.id === ownResearcherId);
@@ -69,6 +70,49 @@ export async function ResearchForm({
               {Object.entries(LEVEL_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </NativeSelect>
             <FieldError name="level" />
+          </Field>
+        </CardContent>
+      </Card>
+
+
+      <Card>
+        <CardHeader><CardTitle>نوع السجل وبيانات النشر</CardTitle></CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <Field label="نوع السجل" required className="md:col-span-2" hint="اختر «توثيق بحث منشور» لإضافة بحث نُشر فعلاً ليُراجَع ويُعتمد ضمن الإنتاج العلمي، أو «تقديم للتحكيم» لبحث جديد يمر بالتحكيم العلمي">
+            <NativeSelect name="recordKind" defaultValue={paper?.recordKind ?? "PUBLISHED_RECORD"}>
+              <option value="PUBLISHED_RECORD">توثيق بحث منشور مسبقاً (إنتاج علمي)</option>
+              <option value="SUBMISSION">تقديم بحث جديد للتحكيم العلمي</option>
+            </NativeSelect>
+          </Field>
+          <Field label="نوع المقالة">
+            <NativeSelect name="articleType" defaultValue={paper?.articleType ?? "ORIGINAL"}>
+              {Object.entries(ARTICLE_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </NativeSelect>
+          </Field>
+          <Field label="سنة النشر">
+            <Input type="number" name="publicationYear" min={1950} max={2100} defaultValue={paper?.publicationYear ?? ""} />
+            <FieldError name="publicationYear" />
+          </Field>
+          <Field label="المجلة العلمية (من قاعدة المجلات)">
+            <NativeSelect name="journalId" defaultValue={paper?.journalId ?? ""}>
+              <option value="">— غير محددة / غير موجودة في القائمة —</option>
+              {journals.map((j) => <option key={j.id} value={j.id}>{j.name}{j.issn ? ` (${j.issn})` : ""}</option>)}
+            </NativeSelect>
+          </Field>
+          <Field label="اسم المجلة / المؤتمر (إن لم تكن في القائمة)">
+            <Input name="journalName" defaultValue={paper?.journalName ?? ""} />
+          </Field>
+          <Field label="تصنيف المجلة (الفهرسة)">
+            <NativeSelect name="indexing" defaultValue={paper?.indexing ?? "NONE"}>
+              {Object.entries(INDEXING_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </NativeSelect>
+          </Field>
+          <Field label="المعرف الرقمي DOI" hint="مثال: 10.1016/j.example.2025.01.001 — يُستخدم لكشف التكرار">
+            <Input name="doi" defaultValue={paper?.doi ?? ""} dir="ltr" className="text-left" />
+          </Field>
+          <Field label="رابط النشر الإلكتروني" className="md:col-span-2">
+            <Input name="url" type="url" defaultValue={paper?.url ?? ""} dir="ltr" className="text-left" placeholder="https://" />
+            <FieldError name="url" />
           </Field>
         </CardContent>
       </Card>

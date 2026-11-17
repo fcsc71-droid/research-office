@@ -15,8 +15,8 @@ export type SystemSettings = {
 };
 
 export const DEFAULT_SETTINGS: SystemSettings = {
-  universityName: "الجامعة",
-  officeName: "مكتب الأبحاث العلمية",
+  universityName: "المعهد العالي للتقنيات الهندسية – بنغازي",
+  officeName: "مكتب البحث العلمي",
   referencePrefix: "RES",
   watermarkInExports: true,
   watermarkOnDownloads: true,

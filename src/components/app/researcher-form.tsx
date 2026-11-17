@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DEGREE_LABELS, RESEARCHER_TYPE_LABELS } from "@/lib/constants";
+import { ResearchProfileFields } from "@/components/app/research-profile-fields";
 import type { ActionResult } from "@/lib/action";
 import type { Researcher } from "@/generated/prisma/client";
 
@@ -26,13 +27,14 @@ export async function ResearcherForm({ action, r }: { action: (p: ActionResult |
           <Field label="البريد الإلكتروني" required><Input type="email" name="email" defaultValue={r?.email} required dir="ltr" className="text-left" /><FieldError name="email" /></Field>
           <Field label="رقم الهاتف"><Input name="phone" defaultValue={r?.phone ?? ""} dir="ltr" className="text-left" /><FieldError name="phone" /></Field>
           <Field label="الفئة" required>
-            <NativeSelect name="type" defaultValue={r?.type ?? "STUDENT"}>{Object.entries(RESEARCHER_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</NativeSelect>
+            <NativeSelect name="type" defaultValue={r?.type ?? "FACULTY"}>{Object.entries(RESEARCHER_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</NativeSelect>
           </Field>
           <Field label="الدرجة العلمية" required>
             <NativeSelect name="academicDegree" defaultValue={r?.academicDegree ?? "BACHELOR_STUDENT"}>{Object.entries(DEGREE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</NativeSelect>
           </Field>
           <CollegeDepartmentSelect colleges={colleges} departments={departments} defaultCollegeId={r?.collegeId} defaultDepartmentId={r?.departmentId} />
-          <Field label="التخصص"><Input name="specialization" defaultValue={r?.specialization ?? ""} /></Field>
+          <Field label="التخصص الدقيق"><Input name="specialization" defaultValue={r?.specialization ?? ""} /></Field>
+          <ResearchProfileFields r={r} />
           <Field label="ملاحظات" className="md:col-span-2"><Textarea name="notes" defaultValue={r?.notes ?? ""} rows={2} /></Field>
           {!r?.userId && (
             <div className="grid gap-3 rounded-lg border border-dashed p-4 md:col-span-2">

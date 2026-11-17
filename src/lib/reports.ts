@@ -2,6 +2,8 @@ import "server-only";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
 import {
+  INDEXING_LABELS, EVENT_TYPE_LABELS, EVENT_SCOPE_LABELS, PARTICIPATION_ROLE_LABELS, PROJECT_STATUS_LABELS,
+  AWARD_TYPE_LABELS, COLLABORATION_TYPE_LABELS, PARTNER_TYPE_LABELS,
   ASSIGNMENT_STATUS_LABELS,
   DEGREE_LABELS,
   RECOMMENDATION_LABELS,
@@ -18,6 +20,14 @@ export const REPORT_TYPES = {
   reviews: "تقرير التحكيم العلمي",
   in_progress: "تقرير الأبحاث قيد الإنجاز",
   published: "تقرير الأبحاث المنشورة",
+  indexed: "تقرير البحوث المنشورة في Scopus و Web of Science",
+  faculty_output: "تقرير الإنتاج العلمي لأعضاء هيئة التدريس",
+  conferences: "تقرير المشاركات في المؤتمرات والفعاليات العلمية",
+  activities: "تقرير الأنشطة العلمية التي نظمها المعهد",
+  projects: "تقرير المشاريع البحثية",
+  awards: "تقرير الجوائز والتكريم",
+  collaborations: "تقرير التعاون البحثي",
+  annual: "التقرير السنوي لمكتب البحث العلمي",
 } as const;
 export type ReportType = keyof typeof REPORT_TYPES;
 
@@ -80,6 +90,17 @@ const paperInclude = {
   college: { select: { name: true } },
   department: { select: { name: true } },
 } satisfies Prisma.ResearchPaperInclude;
+
+const PUBLISHED_WHERE: Prisma.ResearchPaperWhereInput = { OR: [{ status: "PUBLISHED" }, { status: "ARCHIVED", publishedAt: { not: null } }] };
+
+/** نطاق السنة: يعتمد سنة النشر إن وجدت وإلا تاريخ النشر */
+function yearRange(f: ReportFilters): Prisma.ResearchPaperWhereInput {
+  if (!f.from && !f.to) return {};
+  const fy = f.from ? Number(f.from.slice(0, 4)) : 1900;
+  const ty = f.to ? Number(f.to.slice(0, 4)) : 3000;
+  const r = range(f);
+  return { OR: [{ publicationYear: { gte: fy, lte: ty } }, { publicationYear: null, publishedAt: r }] };
+}
 
 function periodLabel(f: ReportFilters) {
   if (!f.from && !f.to) return "جميع الفترات";
@@ -256,6 +277,163 @@ export async function buildReport(f: ReportFilters): Promise<ReportData> {
           { label: "تقييمات مسلمة", value: submitted.length },
           { label: "متأخرة", value: late },
           { label: "متوسط الدرجات", value: avg },
+        ],
+      };
+    }
+    case "indexed": {
+      const papers = await db.researchPaper.findMany({
+        where: { AND: [paperBase(f), { indexing: { in: ["SCOPUS", "WOS", "SCOPUS_WOS"] } }, PUBLISHED_WHERE, yearRange(f)] },
+        include: { ...paperInclude, journal: { select: { name: true, quartile: true } } },
+        orderBy: [{ publicationYear: "desc" }],
+      });
+      const n = (k: string[]) => papers.filter((p) => k.includes(p.indexing)).length;
+      return {
+        title, subtitle,
+        columns: ["عنوان البحث", "الباحث الرئيسي", "القسم", "المجلة", "الربع", "الفهرسة", "سنة النشر", "DOI"],
+        rows: papers.map((p) => [p.titleAr, p.mainResearcher.fullName, p.department?.name ?? "—", p.journal?.name ?? p.journalName ?? "—",
+          p.journal && p.journal.quartile !== "NONE" ? p.journal.quartile : "—", INDEXING_LABELS[p.indexing], p.publicationYear ?? "—", p.doi ?? "—"]),
+        summary: [
+          { label: "إجمالي البحوث المفهرسة", value: papers.length },
+          { label: "في Scopus", value: n(["SCOPUS", "SCOPUS_WOS"]) },
+          { label: "في Web of Science", value: n(["WOS", "SCOPUS_WOS"]) },
+        ],
+      };
+    }
+    case "faculty_output": {
+      const faculty = await db.researcher.findMany({
+        where: { type: "FACULTY", ...(f.collegeId ? { collegeId: f.collegeId } : {}), ...(f.departmentId ? { departmentId: f.departmentId } : {}) },
+        include: {
+          department: { select: { name: true } },
+          authorships: { where: { paper: { AND: [PUBLISHED_WHERE, yearRange(f)] } }, select: { paper: { select: { indexing: true } } } },
+          eventParticipations: { where: { event: { approval: "APPROVED", ...(r ? { startDate: r as Prisma.DateTimeFilter } : {}) } }, select: { id: true } },
+          projectsLed: { where: { approval: "APPROVED" }, select: { id: true } },
+          projectMemberships: { where: { project: { approval: "APPROVED" } }, select: { id: true } },
+          awards: { where: { approval: "APPROVED" }, select: { id: true } },
+        },
+        orderBy: { fullName: "asc" },
+      });
+      const rows = faculty.map((x) => {
+        const pubs = x.authorships.length;
+        const idx = x.authorships.filter((a) => ["SCOPUS", "WOS", "SCOPUS_WOS"].includes(a.paper.indexing)).length;
+        return [x.fullName, x.department?.name ?? "—", DEGREE_LABELS[x.academicDegree], pubs, idx, x.eventParticipations.length,
+          x.projectsLed.length + x.projectMemberships.length, x.awards.length, x.orcid || x.scopusId || x.googleScholar ? "نعم" : "لا"];
+      });
+      const active = rows.filter((r) => (r[3] as number) > 0).length;
+      return {
+        title, subtitle,
+        columns: ["عضو هيئة التدريس", "القسم", "الدرجة", "بحوث منشورة", "Scopus/WoS", "مؤتمرات وأنشطة", "مشاريع", "جوائز", "معرفات علمية"],
+        rows: rows.sort((a, b) => (b[3] as number) - (a[3] as number)),
+        summary: [
+          { label: "عدد أعضاء هيئة التدريس", value: faculty.length },
+          { label: "لديهم إنتاج علمي منشور", value: active },
+          { label: "نسبة أعضاء هيئة التدريس ذوي الإنتاج العلمي", value: faculty.length ? `${Math.round((active / faculty.length) * 100)}%` : "—" },
+          { label: "المشاركون في البحث العلمي (أي نشاط)", value: rows.filter((r) => (r[3] as number) + (r[5] as number) + (r[6] as number) > 0).length },
+        ],
+      };
+    }
+    case "conferences":
+    case "activities": {
+      const institute = f.type === "activities";
+      const events = await db.scientificEvent.findMany({
+        where: {
+          organizedByInstitute: institute, approval: "APPROVED",
+          ...(r ? { startDate: r as Prisma.DateTimeFilter } : {}),
+          ...(f.departmentId ? { participants: { some: { researcher: { departmentId: f.departmentId } } } } : {}),
+          ...(f.q ? { name: { contains: f.q, mode: "insensitive" as const } } : {}),
+        },
+        include: { participants: { include: { researcher: { select: { fullName: true } } } } },
+        orderBy: { startDate: "desc" },
+      });
+      const byType = countBy(events, (e) => EVENT_TYPE_LABELS[e.type]);
+      return {
+        title, subtitle,
+        columns: institute
+          ? ["النشاط", "النوع", "النطاق", "التاريخ", "المكان", "المنظمون", "عدد الحضور"]
+          : ["الفعالية", "النوع", "النطاق", "الجهة المنظمة", "التاريخ", "المشاركون ونوع المشاركة"],
+        rows: events.map((e) => institute
+          ? [e.name, EVENT_TYPE_LABELS[e.type], EVENT_SCOPE_LABELS[e.scope], formatDate(e.startDate), e.location ?? "—", e.participants.map((p) => p.researcher.fullName).join("، ") || "—", e.attendeesCount ?? "—"]
+          : [e.name, EVENT_TYPE_LABELS[e.type], EVENT_SCOPE_LABELS[e.scope], e.organizer ?? "—", formatDate(e.startDate), e.participants.map((p) => `${p.researcher.fullName} (${PARTICIPATION_ROLE_LABELS[p.role]})`).join("، ")]),
+        summary: [
+          { label: institute ? "عدد الأنشطة" : "عدد الفعاليات", value: events.length },
+          ...(!institute ? [{ label: "إجمالي المشاركات", value: events.reduce((a, e) => a + e.participants.length, 0) }, { label: "دولية", value: events.filter((e) => e.scope === "INTERNATIONAL").length }] : []),
+          ...[...byType].map(([label, value]) => ({ label, value })),
+        ],
+      };
+    }
+    case "projects": {
+      const list = await db.researchProject.findMany({
+        where: { approval: "APPROVED", ...(f.departmentId ? { departmentId: f.departmentId } : {}), ...(r ? { createdAt: r as Prisma.DateTimeFilter } : {}), ...(f.q ? { title: { contains: f.q, mode: "insensitive" as const } } : {}) },
+        include: { lead: { select: { fullName: true } }, department: { select: { name: true } }, members: true, reports: { orderBy: { createdAt: "desc" }, take: 1 } },
+        orderBy: { createdAt: "desc" },
+      });
+      const byStatus = countBy(list, (p) => PROJECT_STATUS_LABELS[p.status]);
+      return {
+        title, subtitle,
+        columns: ["المشروع", "الباحث الرئيسي", "القسم", "عدد الفريق", "البداية", "النهاية المتوقعة", "المرحلة", "الإنجاز", "الجهات المتعاونة"],
+        rows: list.map((p) => [p.title, p.lead.fullName, p.department?.name ?? "—", p.members.length + 1, formatDate(p.startDate), formatDate(p.expectedEndDate),
+          PROJECT_STATUS_LABELS[p.status], `${p.reports[0]?.progress ?? 0}%`, p.partners ?? "—"]),
+        summary: [
+          { label: "إجمالي المشاريع", value: list.length },
+          { label: "المشاريع النشطة", value: list.filter((p) => ["APPROVED", "IN_PROGRESS"].includes(p.status)).length },
+          ...[...byStatus].map(([label, value]) => ({ label, value })),
+        ],
+      };
+    }
+    case "awards": {
+      const list = await db.award.findMany({
+        where: { approval: "APPROVED", ...(r ? { date: r as Prisma.DateTimeFilter } : {}), ...(f.departmentId ? { researcher: { departmentId: f.departmentId } } : {}) },
+        include: { researcher: { select: { fullName: true, department: { select: { name: true } } } } },
+        orderBy: { date: "desc" },
+      });
+      return {
+        title, subtitle,
+        columns: ["الجائزة", "عضو هيئة التدريس", "القسم", "النوع", "الجهة المانحة", "التاريخ"],
+        rows: list.map((w) => [w.title, w.researcher.fullName, w.researcher.department?.name ?? "—", AWARD_TYPE_LABELS[w.type], w.grantor ?? "—", formatDate(w.date)]),
+        summary: [{ label: "إجمالي الجوائز", value: list.length }, ...[...countBy(list, (w) => AWARD_TYPE_LABELS[w.type])].map(([label, value]) => ({ label, value }))],
+      };
+    }
+    case "collaborations": {
+      const list = await db.collaboration.findMany({ where: r ? { startDate: r } : {}, orderBy: { startDate: "desc" } });
+      const now = new Date();
+      return {
+        title, subtitle,
+        columns: ["الجهة", "نوع الجهة", "نوع التعاون", "العنوان", "البداية", "الانتهاء", "الحالة"],
+        rows: list.map((c) => [c.partnerName, PARTNER_TYPE_LABELS[c.partnerType], COLLABORATION_TYPE_LABELS[c.type], c.title, formatDate(c.startDate), formatDate(c.endDate), !c.endDate || c.endDate >= now ? "سارية" : "منتهية"]),
+        summary: [{ label: "إجمالي الاتفاقيات والتعاونات", value: list.length }, { label: "السارية", value: list.filter((c) => !c.endDate || c.endDate >= now).length }],
+      };
+    }
+    case "annual": {
+      const depts = await db.department.findMany({ orderBy: { name: "asc" }, include: { college: { select: { name: true } } } });
+      const rows: (string | number)[][] = [];
+      let tot = [0, 0, 0, 0, 0, 0];
+      for (const d of depts) {
+        const [faculty, pubs, indexed, events, projects, awards] = await Promise.all([
+          db.researcher.count({ where: { departmentId: d.id, type: "FACULTY" } }),
+          db.researchPaper.count({ where: { AND: [{ departmentId: d.id }, PUBLISHED_WHERE, yearRange(f)] } }),
+          db.researchPaper.count({ where: { AND: [{ departmentId: d.id }, PUBLISHED_WHERE, yearRange(f), { indexing: { in: ["SCOPUS", "WOS", "SCOPUS_WOS"] } }] } }),
+          db.eventParticipant.count({ where: { researcher: { departmentId: d.id }, event: { approval: "APPROVED", ...(r ? { startDate: r as Prisma.DateTimeFilter } : {}) } } }),
+          db.researchProject.count({ where: { departmentId: d.id, approval: "APPROVED", status: { in: ["APPROVED", "IN_PROGRESS", "COMPLETED", "PUBLISHED"] } } }),
+          db.award.count({ where: { approval: "APPROVED", researcher: { departmentId: d.id }, ...(r ? { date: r as Prisma.DateTimeFilter } : {}) } }),
+        ]);
+        const v = [faculty, pubs, indexed, events, projects, awards];
+        tot = tot.map((t, i) => t + v[i]);
+        rows.push([d.name, ...v]);
+      }
+      const activities = await db.scientificEvent.count({ where: { organizedByInstitute: true, approval: "APPROVED", ...(r ? { startDate: r as Prisma.DateTimeFilter } : {}) } });
+      const collabs = await db.collaboration.count();
+      rows.push(["الإجمالي", ...tot]);
+      return {
+        title, subtitle,
+        columns: ["القسم العلمي", "أعضاء هيئة التدريس", "البحوث المنشورة", "Scopus / WoS", "المشاركات العلمية", "المشاريع البحثية", "الجوائز"],
+        rows,
+        summary: [
+          { label: "البحوث المنشورة", value: tot[1] },
+          { label: "المنشورة في Scopus/WoS", value: tot[2] },
+          { label: "المشاركات في المؤتمرات والفعاليات", value: tot[3] },
+          { label: "المشاريع البحثية", value: tot[4] },
+          { label: "الأنشطة التي نظمها المعهد", value: activities },
+          { label: "الجوائز", value: tot[5] },
+          { label: "اتفاقيات التعاون", value: collabs },
         ],
       };
     }

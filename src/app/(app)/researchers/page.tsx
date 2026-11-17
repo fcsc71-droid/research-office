@@ -25,7 +25,15 @@ export default async function ResearchersPage({ searchParams }: { searchParams: 
     { universityId: { contains: sp.q } },
     { email: { contains: sp.q, mode: "insensitive" } },
     { specialization: { contains: sp.q, mode: "insensitive" } },
+    { generalSpecialization: { contains: sp.q, mode: "insensitive" } },
+    { researchInterests: { has: sp.q } },
   ];
+  if (sp.interest) where.researchInterests = { has: sp.interest };
+  if (sp.ids === "scopus") where.scopusId = { not: null };
+  if (sp.ids === "orcid") where.orcid = { not: null };
+  if (sp.ids === "missing") where.AND = [{ orcid: null }, { scopusId: null }, { googleScholar: null }];
+  // رئيس القسم يرى باحثي قسمه فقط
+  if (!can(user, "research.view_all") && can(user, "research.view_department")) where.departmentId = user.departmentId ?? "__none__";
   if (sp.collegeId) where.collegeId = sp.collegeId;
   if (sp.departmentId) where.departmentId = sp.departmentId;
   if (sp.type && sp.type in ResearcherType) where.type = sp.type as ResearcherType;
@@ -44,15 +52,16 @@ export default async function ResearchersPage({ searchParams }: { searchParams: 
 
   return (
     <div>
-      <PageHeader icon={<GraduationCap />} title="الباحثون والطلاب" description="ملفات الباحثين وسجل مشاركاتهم البحثية"
+      <PageHeader icon={<GraduationCap />} title="أعضاء هيئة التدريس والباحثون" description="ملفات الباحثين وسجل مشاركاتهم البحثية"
         actions={can(user, "researchers.manage") && <Button asChild><Link href="/researchers/new"><UserPlus /> إضافة باحث</Link></Button>} />
       <Card className="overflow-hidden">
-        <FilterBar basePath="/researchers" fields={[
-          { type: "search", name: "q", value: sp.q, placeholder: "ابحث بالاسم، الرقم الجامعي، البريد، التخصص..." },
+        <FilterBar basePath="/researchers" hidden={{ interest: sp.interest }} fields={[
+          { type: "search", name: "q", value: sp.q, placeholder: "ابحث بالاسم، الرقم الجامعي، البريد، التخصص، الاهتمام البحثي..." },
           { type: "select", name: "collegeId", label: "الكلية", value: sp.collegeId, options: colleges.map((c) => ({ value: c.id, label: c.name })) },
           { type: "select", name: "departmentId", label: "القسم", value: sp.departmentId, options: departments.map((c) => ({ value: c.id, label: c.name })) },
           { type: "select", name: "type", label: "الفئة", value: sp.type, options: Object.entries(RESEARCHER_TYPE_LABELS).map(([value, label]) => ({ value, label })) },
           { type: "select", name: "degree", label: "الدرجة العلمية", value: sp.degree, options: Object.entries(DEGREE_LABELS).map(([value, label]) => ({ value, label })) },
+          { type: "select", name: "ids", label: "المعرفات العلمية", value: sp.ids, options: [{ value: "scopus", label: "لديه Scopus ID" }, { value: "orcid", label: "لديه ORCID" }, { value: "missing", label: "بدون معرفات" }] },
           { type: "select", name: "sort", label: "الترتيب", value: sp.sort, options: [{ value: "name", label: "الاسم" }, { value: "papers", label: "عدد الأبحاث" }] },
         ]} />
         {items.length === 0 ? <EmptyState title="لا يوجد باحثون مطابقون" /> : (

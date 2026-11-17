@@ -1,7 +1,7 @@
 import Link from "next/link";
 import {
   AlertCircle, Building2, CheckCircle2, ClipboardCheck, Clock, FilePlus2, FileText, GraduationCap, Hourglass,
-  LayoutDashboard, PenLine, UserCheck, XCircle, Bell, Activity, FlaskConical,
+  LayoutDashboard, PenLine, UserCheck, XCircle, Bell, Activity, FlaskConical, Presentation, FolderKanban, BadgeCheck, Award, Inbox,
 } from "lucide-react";
 import { requireUser, can, type CurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -9,7 +9,7 @@ import { ownPapersWhere } from "@/lib/access";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageHeader, StatCard, StatusBadge, EmptyState } from "@/components/app/misc";
-import { MonthlyChart, CategoryChart } from "@/components/app/charts";
+import { MonthlyChart, CategoryChart, HorizontalBars } from "@/components/app/charts";
 import { ASSIGNMENT_STATUS_COLORS, ASSIGNMENT_STATUS_LABELS } from "@/lib/constants";
 import { AUDIT_ACTION_LABELS } from "@/lib/audit";
 import { formatDate, relativeTime, cn } from "@/lib/utils";
@@ -49,6 +49,23 @@ async function AdminDashboard({ user }: { user: CurrentUser }) {
   const since = new Date();
   since.setMonth(since.getMonth() - 11, 1);
   since.setHours(0, 0, 0, 0);
+
+  const [indexedCount, eventCount, activeProjects, awardsCount, pendingProjects, pendingEvents, pendingAwards, pubYears, deptRows] = await Promise.all([
+    db.researchPaper.count({ where: { indexing: { in: ["SCOPUS", "WOS", "SCOPUS_WOS"] }, OR: [{ status: "PUBLISHED" }, { status: "ARCHIVED", publishedAt: { not: null } }] } }),
+    db.eventParticipant.count({ where: { event: { approval: "APPROVED", organizedByInstitute: false } } }),
+    db.researchProject.count({ where: { approval: "APPROVED", status: { in: ["APPROVED", "IN_PROGRESS"] } } }),
+    db.award.count({ where: { approval: "APPROVED" } }),
+    db.researchProject.count({ where: { approval: "PENDING" } }),
+    db.scientificEvent.count({ where: { approval: "PENDING" } }),
+    db.award.count({ where: { approval: "PENDING" } }),
+    db.researchPaper.findMany({ where: { OR: [{ status: "PUBLISHED" }, { status: "ARCHIVED", publishedAt: { not: null } }] }, select: { publicationYear: true, publishedAt: true } }),
+    db.department.findMany({ select: { name: true, _count: { select: { papers: { where: { status: "PUBLISHED" } } } } } }),
+  ]);
+  const yearMap = new Map<number, number>();
+  for (const p of pubYears) { const y = p.publicationYear ?? p.publishedAt?.getFullYear(); if (y) yearMap.set(y, (yearMap.get(y) ?? 0) + 1); }
+  const byYear = [...yearMap.entries()].sort((a, b) => a[0] - b[0]).slice(-8).map(([y, value]) => ({ name: String(y), value }));
+  const byDept = deptRows.map((d) => ({ name: d.name, value: d._count.papers })).filter((d) => d.value > 0).sort((a, b) => b.value - a.value);
+  const pendingTotal = pendingProjects + pendingEvents + pendingAwards;
 
   const [byStatus, researchers, reviewers, departments, recent, activity, monthlyRaw, byCategory, demo] = await Promise.all([
     db.researchPaper.groupBy({ by: ["status"], _count: true }),
@@ -111,6 +128,25 @@ async function AdminDashboard({ user }: { user: CurrentUser }) {
         <StatCard label="المحكمون" value={reviewers} icon={<UserCheck />} tone="slate" href={can(user, "reviewers.manage") ? "/reviewers" : undefined} />
         <StatCard label="الأقسام العلمية" value={departments} icon={<Building2 />} tone="blue" href={can(user, "structure.manage") ? "/structure" : undefined} />
         <StatCard label="المسودات" value={count("DRAFT")} icon={<Clock />} tone="slate" href="/research?status=DRAFT" />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <StatCard label="بحوث في Scopus / WoS" value={indexedCount} icon={<BadgeCheck />} tone="green" href="/research?indexing=INDEXED" />
+        <StatCard label="المشاركات في المؤتمرات والفعاليات" value={eventCount} icon={<Presentation />} tone="indigo" href="/events" />
+        <StatCard label="المشاريع البحثية النشطة" value={activeProjects} icon={<FolderKanban />} tone="blue" href="/projects?status=IN_PROGRESS" />
+        <StatCard label="الجوائز والتكريم" value={awardsCount} icon={<Award />} tone="amber" href="/awards" />
+        <StatCard label="سجلات بانتظار الاعتماد" value={pendingTotal} icon={<Inbox />} tone={pendingTotal ? "red" : "slate"} href={pendingProjects ? "/projects?approval=PENDING" : pendingEvents ? "/events?approval=PENDING" : "/awards?approval=PENDING"} />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle>الإنتاج العلمي حسب السنة</CardTitle><CardDescription>البحوث المنشورة المعتمدة</CardDescription></CardHeader>
+          <CardContent><HorizontalBars data={byYear} name="بحث منشور" /></CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>توزيع البحوث حسب الأقسام</CardTitle><CardDescription>البحوث المنشورة لكل قسم علمي</CardDescription></CardHeader>
+          <CardContent><HorizontalBars data={byDept} name="بحث منشور" /></CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-5">

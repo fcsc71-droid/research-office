@@ -10,7 +10,8 @@ import { deleteStored } from "@/lib/storage";
 import { applyStatusChange, attachFile, generateReferenceNo } from "@/lib/research-service";
 import { TRANSITIONS } from "@/lib/workflow";
 import { ActionError, formToObject, ok, run, type ActionResult } from "@/lib/action";
-import { ResearchLevel, ResearchType, ResearchStatus, FileCategory, CommentType } from "@/generated/prisma/enums";
+import { ResearchLevel, ResearchType, ResearchStatus, FileCategory, CommentType, RecordKind, ArticleType, IndexingType } from "@/generated/prisma/enums";
+import { findPaperDuplicates, normalizeDoi } from "@/lib/duplicates";
 
 const optStr = (max = 300) =>
   z.string().trim().max(max).optional().transform((v) => (v ? v : null));
@@ -45,7 +46,39 @@ const paperSchema = z.object({
     .optional()
     .transform((v) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(v + "T12:00:00") : null)),
   submitNow: z.string().optional(),
+  recordKind: z.enum(RecordKind).catch("SUBMISSION"),
+  articleType: z.enum(ArticleType).catch("ORIGINAL"),
+  journalId: optId,
+  journalName: optStr(300),
+  indexing: z.enum(IndexingType).catch("NONE"),
+  doi: optStr(200).transform((v) => normalizeDoi(v)),
+  url: optStr(500).refine((v) => !v || /^https?:\/\//i.test(v), "الرابط يجب أن يبدأ بـ http:// أو https://"),
+  publicationYear: z
+    .string()
+    .optional()
+    .transform((v) => (v ? Number(v) : null))
+    .refine((v) => v === null || (Number.isInteger(v) && v >= 1950 && v <= 2100), "سنة نشر غير صالحة"),
 });
+
+function publicationData(data: z.infer<typeof paperSchema>) {
+  return {
+    recordKind: data.recordKind,
+    articleType: data.articleType,
+    journalId: data.journalId,
+    journalName: data.journalName,
+    indexing: data.indexing,
+    doi: data.doi,
+    url: data.url,
+    publicationYear: data.publicationYear,
+  };
+}
+
+async function assertNoDoiDuplicate(doi: string | null, id?: string) {
+  if (!doi) return;
+  const dups = await findPaperDuplicates({ id, doi, titleAr: "" });
+  const same = dups.find((d) => d.sameDoi);
+  if (same) throw new ActionError(`هذا البحث مسجل مسبقاً بنفس المعرف DOI (الرقم المرجعي ${same.referenceNo})`);
+}
 
 async function resolveAuthors(user: CurrentUser, data: z.infer<typeof paperSchema>) {
   let mainId = data.mainResearcherId;
@@ -84,6 +117,7 @@ export async function createPaperAction(_: ActionResult | null, fd: FormData): P
     if (!can(user, "research.create")) throw new ActionError("ليست لديك صلاحية إنشاء بحث");
     const data = paperSchema.parse(formToObject(fd));
     await validateStructure(data);
+    await assertNoDoiDuplicate(data.doi);
     const { main, authors } = await resolveAuthors(user, data);
     const settings = await getSettings();
     const staff = can(user, "research.view_all");
@@ -108,6 +142,7 @@ export async function createPaperAction(_: ActionResult | null, fd: FormData): P
             supervisorName: data.supervisorName,
             type: data.type,
             level: data.level,
+            ...publicationData(data),
             status: "DRAFT",
             createdById: user.id,
             authors: { create: authors },
@@ -148,6 +183,7 @@ export async function updatePaperAction(id: string, _: ActionResult | null, fd: 
     if (!access.canEditMeta) throw new ActionError("لا يمكن تعديل البحث في حالته الحالية أو ليست لديك الصلاحية");
     const data = paperSchema.parse(formToObject(fd));
     await validateStructure(data);
+    await assertNoDoiDuplicate(data.doi, id);
     if (!can(user, "research.view_all")) data.mainResearcherId = paper.mainResearcherId;
     else data.mainResearcherId ??= paper.mainResearcherId;
     const { main, authors } = await resolveAuthors(user, data);
@@ -168,6 +204,7 @@ export async function updatePaperAction(id: string, _: ActionResult | null, fd: 
           supervisorName: data.supervisorName,
           type: data.type,
           level: data.level,
+          ...publicationData(data),
           ...(can(user, "research.edit_all") && data.submittedAt ? { submittedAt: data.submittedAt } : {}),
           authors: { create: authors },
         },
@@ -203,7 +240,7 @@ export async function changeStatusAction(id: string, _: ActionResult | null, fd:
     const { paper, access } = await loadPaperFor(user, id);
     const { to, note } = statusSchema.parse(formToObject(fd));
     const settings = await getSettings();
-    const allowed = TRANSITIONS[paper.status].find((t) => t.to === to);
+    const allowed = TRANSITIONS[paper.status].find((t) => t.to === to && (!t.kind || t.kind === paper.recordKind));
     if (!allowed) throw new ActionError("انتقال غير مسموح من الحالة الحالية");
     const ownerSubmit = access.owner && paper.status === "DRAFT" && to === "SUBMITTED" && settings.allowResearcherSelfSubmit;
     if (!can(user, allowed.perm) && !ownerSubmit) throw new ActionError("ليست لديك صلاحية تنفيذ هذا الانتقال");

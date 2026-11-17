@@ -17,7 +17,17 @@ export function ownPapersWhere(user: CurrentUser): Prisma.ResearchPaperWhereInpu
 /** شرط الأبحاث المسموح للمستخدم برؤيتها في قائمة "الأبحاث" */
 export function visiblePapersWhere(user: CurrentUser): Prisma.ResearchPaperWhereInput {
   if (can(user, "research.view_all")) return {};
+  // رئيس القسم يرى أبحاث قسمه إضافة لأبحاثه الخاصة
+  if (can(user, "research.view_department") && user.departmentId) {
+    return { OR: [{ departmentId: user.departmentId }, ...(ownPapersWhere(user).OR ?? [])] };
+  }
   return ownPapersWhere(user);
+}
+
+/** هل يرى المستخدم كل سجلات القسم المحدد؟ */
+export function canSeeDepartment(user: CurrentUser, departmentId: string | null | undefined) {
+  if (can(user, "research.view_all")) return true;
+  return !!departmentId && can(user, "research.view_department") && user.departmentId === departmentId;
 }
 
 export const ARCHIVE_STATUSES = ["ACCEPTED", "PUBLISHED", "ARCHIVED"] as const;
@@ -40,6 +50,8 @@ export async function getPaperAccess(
   blindReview = true,
 ): Promise<PaperAccess> {
   const staff = can(user, "research.view_all");
+  const deptHead = !staff && can(user, "research.view_department") && !!user.departmentId &&
+    (await db.researchPaper.count({ where: { id: paper.id, departmentId: user.departmentId } })) > 0;
   const ownerCount = staff
     ? 0
     : await db.researchPaper.count({ where: { id: paper.id, ...ownPapersWhere(user) } });
@@ -51,7 +63,7 @@ export async function getPaperAccess(
     })) > 0;
   const archiveReader =
     can(user, "archive.view") && (paper.status === "PUBLISHED" || (paper.status === "ARCHIVED" && !!paper.publishedAt));
-  const canView = staff || owner || reviewer || archiveReader;
+  const canView = staff || deptHead || owner || reviewer || archiveReader;
   const editableByOwner = ["DRAFT", "NEEDS_REVISION"].includes(paper.status);
   return {
     staff,
@@ -62,6 +74,6 @@ export async function getPaperAccess(
     canEditMeta: can(user, "research.edit_all") || (owner && editableByOwner),
     canUpload: can(user, "files.manage") || (owner && editableByOwner),
     canSeeReviews: can(user, "reviews.view_all"),
-    canSeeAuthors: staff || owner || archiveReader || !(reviewer && blindReview),
+    canSeeAuthors: staff || deptHead || owner || archiveReader || !(reviewer && blindReview),
   };
 }
