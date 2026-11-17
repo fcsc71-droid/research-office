@@ -67,8 +67,8 @@ export default async function ResearchersPage({ searchParams }: { searchParams: 
         {items.length === 0 ? <EmptyState title="لا يوجد باحثون مطابقون" /> : (
           <Table>
             <TableHeader><TableRow>
-              <TableHead>الاسم</TableHead><TableHead>الرقم الجامعي/الوظيفي</TableHead><TableHead>الكلية / القسم</TableHead>
-              <TableHead>الدرجة العلمية</TableHead><TableHead>الأبحاث</TableHead><TableHead>المشاركات</TableHead><TableHead>الحساب</TableHead>
+              <TableHead>الاسم</TableHead><TableHead>الرمز (الرقم الوظيفي)</TableHead><TableHead>القسم</TableHead>
+              <TableHead>الدرجة والمؤهل العلمي</TableHead><TableHead>الأبحاث</TableHead><TableHead>المشاركات</TableHead><TableHead>الحساب</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {items.map((r) => (
@@ -79,7 +79,7 @@ export default async function ResearchersPage({ searchParams }: { searchParams: 
                   </TableCell>
                   <TableCell className="font-mono text-xs">{r.universityId}</TableCell>
                   <TableCell className="text-xs">{r.college?.name ?? "—"}<br /><span className="text-muted-foreground">{r.department?.name ?? ""}</span></TableCell>
-                  <TableCell className="text-xs">{DEGREE_LABELS[r.academicDegree]}<br /><span className="text-muted-foreground">{RESEARCHER_TYPE_LABELS[r.type]}</span></TableCell>
+                  <TableCell className="text-xs">{DEGREE_LABELS[r.academicDegree]}<br /><span className="text-muted-foreground">{r.qualification ? `${r.qualification}${r.qualificationYear ? ` (${r.qualificationYear})` : ""}` : RESEARCHER_TYPE_LABELS[r.type]}</span></TableCell>
                   <TableCell className="font-bold text-navy">{r._count.mainPapers}</TableCell>
                   <TableCell>{Math.max(0, r._count.authorships - r._count.mainPapers)}</TableCell>
                   <TableCell>{r.userId ? <Badge variant="success">مفعّل</Badge> : <Badge variant="outline">بدون حساب</Badge>}</TableCell>
