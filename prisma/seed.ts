@@ -16,7 +16,7 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import type { ResearchStatus, ResearchType, ResearchLevel, AcademicDegree, ReviewRecommendation } from "../src/generated/prisma/enums";
-import { DEFAULT_ROLE_PERMISSIONS, PERMISSIONS, ROLE_LABELS, type RoleKey } from "../src/lib/constants";
+import { DEFAULT_ROLE_PERMISSIONS, PERMISSIONS, PERMISSION_GRANTS, ROLE_LABELS, type RoleKey } from "../src/lib/constants";
 
 const client = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
 const db = client;
@@ -51,6 +51,22 @@ async function seedBase() {
       });
     }
   }
+  // منح إضافية لمرة واحدة (مثل السماح للطالب بتقديم بحث)
+  const grantsRow = await db.systemSetting.findUnique({ where: { key: "appliedPermissionGrants" } });
+  const grantsDone = new Set<string>(Array.isArray(grantsRow?.value) ? (grantsRow!.value as string[]) : []);
+  for (const g of PERMISSION_GRANTS) {
+    if (grantsDone.has(g.id)) continue;
+    const role = await db.role.findUnique({ where: { key: g.role } });
+    if (role) {
+      await db.rolePermission.createMany({ data: g.codes.map((c) => ({ roleId: role.id, permissionId: byCode.get(c)! })), skipDuplicates: true });
+    }
+    grantsDone.add(g.id);
+  }
+  await db.systemSetting.upsert({
+    where: { key: "appliedPermissionGrants" },
+    create: { key: "appliedPermissionGrants", value: [...grantsDone] },
+    update: { value: [...grantsDone] },
+  });
   const allCodes = PERMISSIONS.map((p) => p.code);
   await db.systemSetting.upsert({
     where: { key: "appliedDefaultPermissions" },

@@ -105,8 +105,13 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleKey, PermissionCode[]> = {
   RESEARCHER: ["research.create", "archive.view", "records.submit_own"],
   REVIEWER: ["reviews.perform"],
   DEPT_HEAD: ["research.create", "research.view_department", "departments.profile", "archive.view", "records.submit_own", "researchers.view"],
-  STUDENT: ["archive.view"],
+  STUDENT: ["archive.view", "research.create"],
 };
+
+/** منح إضافية تُطبَّق مرة واحدة على قواعد البيانات القائمة (دون المساس بتعديلات المدير) */
+export const PERMISSION_GRANTS: { id: string; role: RoleKey; codes: PermissionCode[] }[] = [
+  { id: "2026-11-student-submit-research", role: "STUDENT", codes: ["research.create"] },
+];
 
 export const STATUS_LABELS: Record<ResearchStatus, string> = {
   DRAFT: "مسودة",

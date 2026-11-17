@@ -133,3 +133,30 @@ export async function requestProfileUpdateAction(id: string, _: ActionResult | n
     return ok("تم إرسال طلب التحديث للباحث");
   });
 }
+
+/** إنشاء ملف باحث لصاحب الحساب (مثل الطالب) عند تقديم أول بحث */
+export async function createOwnResearcherProfileAction(_: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const user = await assertUser();
+    if (user.researcherId) return ok("ملفك البحثي موجود", "/research/new");
+    const data = z.object({
+      universityId: z.string().trim().min(2, "الرقم الجامعي مطلوب").max(50).regex(/^[\w-]+$/, "أرقام وحروف فقط"),
+      departmentId: z.string().min(1, "اختر القسم"),
+      academicDegree: z.enum(AcademicDegree),
+    }).parse(formToObject(fd));
+    const dept = await db.department.findUnique({ where: { id: data.departmentId } });
+    if (!dept) throw new ActionError("القسم غير موجود");
+    const taken = await db.researcher.findFirst({ where: { OR: [{ universityId: data.universityId }, { email: user.email }] } });
+    if (taken) throw new ActionError("يوجد ملف باحث بنفس الرقم الجامعي أو البريد. تواصل مع مكتب البحث العلمي لربطه بحسابك");
+    const isStudent = user.roleKey === "STUDENT";
+    const r = await db.researcher.create({
+      data: {
+        fullName: user.name, email: user.email, phone: user.phone, universityId: data.universityId, userId: user.id,
+        type: isStudent ? "STUDENT" : "FACULTY", academicDegree: data.academicDegree, departmentId: dept.id, collegeId: dept.collegeId,
+      },
+    });
+    await db.user.update({ where: { id: user.id }, data: { departmentId: dept.id, collegeId: dept.collegeId } });
+    await audit({ userId: user.id, action: "CREATE", entity: "Researcher", entityId: r.id, summary: "إنشاء ملف باحث ذاتي لتقديم بحث" });
+    return ok("تم إنشاء ملفك كباحث، يمكنك الآن تقديم بحثك", "/research/new");
+  });
+}
