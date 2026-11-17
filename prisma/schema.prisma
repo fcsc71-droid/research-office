@@ -263,6 +263,7 @@ model User {
   lastLoginAt    DateTime?
   failedLogins   Int         @default(0)
   lockedUntil    DateTime?
+  mustChangePassword Boolean @default(false) // تغيير كلمة المرور إلزامي عند أول دخول
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 

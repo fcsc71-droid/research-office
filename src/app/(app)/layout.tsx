@@ -42,7 +42,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <UserMenu name={user.name} roleName={user.roleName} email={user.email} />
           </div>
         </header>
-        <main className="mx-auto w-full max-w-[1400px] p-4 sm:p-6">{children}</main>
+        <main className="mx-auto w-full max-w-[1400px] p-4 sm:p-6">
+          {user.mustChangePassword && (
+            <Link href="/profile?changePassword=1" className="no-print mb-4 flex items-center gap-2 rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-900">
+              🔒 أنت تستخدم كلمة مرور مؤقتة. يرجى تغييرها الآن من الملف الشخصي ←
+            </Link>
+          )}
+          {children}
+        </main>
       </div>
     </div>
   );

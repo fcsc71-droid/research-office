@@ -47,7 +47,7 @@ export async function loginAction(_: ActionResult | null, fd: FormData): Promise
   ipAttempts.delete(ip);
   await createSession(user.id);
   await audit({ userId: user.id, action: "LOGIN", entity: "User", entityId: user.id, summary: "تسجيل دخول ناجح" });
-  const target = next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+  const target = user.mustChangePassword ? "/profile?changePassword=1" : next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
   redirect(target);
 }
 

@@ -85,6 +85,7 @@ async function loadCurrentUser() {
     roleName: u.role.name,
     researcherId: u.researcher?.id ?? null,
     departmentId: u.departmentId,
+    mustChangePassword: u.mustChangePassword,
     permissions,
   };
 }

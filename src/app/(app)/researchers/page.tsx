@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader, EmptyState, Pagination } from "@/components/app/misc";
 import { FilterBar } from "@/components/app/filter-bar";
+import { BulkAccountsButton } from "@/components/app/bulk-accounts";
 
 export const metadata = { title: "الباحثون والطلاب" };
 const PAGE_SIZE = 20;
@@ -39,6 +40,7 @@ export default async function ResearchersPage({ searchParams }: { searchParams: 
   if (sp.type && sp.type in ResearcherType) where.type = sp.type as ResearcherType;
   if (sp.degree && sp.degree in AcademicDegree) where.academicDegree = sp.degree as AcademicDegree;
 
+  const withoutAccount = can(user, "researchers.manage") ? await db.researcher.count({ where: { userId: null, type: { not: "STUDENT" } } }) : 0;
   const [total, items, colleges, departments] = await Promise.all([
     db.researcher.count({ where }),
     db.researcher.findMany({
@@ -53,7 +55,12 @@ export default async function ResearchersPage({ searchParams }: { searchParams: 
   return (
     <div>
       <PageHeader icon={<GraduationCap />} title="أعضاء هيئة التدريس والباحثون" description="ملفات الباحثين وسجل مشاركاتهم البحثية"
-        actions={can(user, "researchers.manage") && <Button asChild><Link href="/researchers/new"><UserPlus /> إضافة باحث</Link></Button>} />
+        actions={can(user, "researchers.manage") && (
+          <>
+            <BulkAccountsButton count={withoutAccount} departments={departments.map((d) => ({ id: d.id, name: d.name }))} />
+            <Button asChild><Link href="/researchers/new"><UserPlus /> إضافة باحث</Link></Button>
+          </>
+        )} />
       <Card className="overflow-hidden">
         <FilterBar basePath="/researchers" hidden={{ interest: sp.interest }} fields={[
           { type: "search", name: "q", value: sp.q, placeholder: "ابحث بالاسم، الرقم الجامعي، البريد، التخصص، الاهتمام البحثي..." },

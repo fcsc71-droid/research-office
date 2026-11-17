@@ -58,7 +58,7 @@ export async function saveUserAction(id: string | null, _: ActionResult | null, 
       const pass = data.password ? password.parse(data.password) : null;
       await db.user.update({
         where: { id },
-        data: { ...base, isActive: data.isActive === "on", ...(pass ? { passwordHash: await hashPassword(pass), failedLogins: 0, lockedUntil: null } : {}) },
+        data: { ...base, isActive: data.isActive === "on", ...(pass ? { passwordHash: await hashPassword(pass), failedLogins: 0, lockedUntil: null, mustChangePassword: true } : {}) },
       });
       if (data.isActive !== "on" || pass) await db.session.deleteMany({ where: { userId: id } });
       await audit({ userId: me.id, action: "UPDATE", entity: "User", entityId: id, summary: `تعديل المستخدم ${data.name}${pass ? " (مع تغيير كلمة المرور)" : ""}` });
@@ -255,7 +255,8 @@ export async function changePasswordAction(_: ActionResult | null, fd: FormData)
       .parse(formToObject(fd));
     const u = await db.user.findUniqueOrThrow({ where: { id: me.id } });
     if (!(await verifyPassword(data.current, u.passwordHash))) throw new ActionError("كلمة المرور الحالية غير صحيحة");
-    await db.user.update({ where: { id: me.id }, data: { passwordHash: await hashPassword(data.next) } });
+    if (data.next === data.current) throw new ActionError("كلمة المرور الجديدة يجب أن تختلف عن الحالية");
+    await db.user.update({ where: { id: me.id }, data: { passwordHash: await hashPassword(data.next), mustChangePassword: false } });
     await audit({ userId: me.id, action: "PASSWORD", entity: "User", entityId: me.id, summary: "تغيير كلمة المرور" });
     return ok("تم تغيير كلمة المرور بنجاح");
   });
